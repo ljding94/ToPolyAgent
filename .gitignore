@@ -1,0 +1,36 @@
+# Ignore everything first
+*
+
+# Then allow specific files and folders
+!README.md
+#!setup.py
+!requirements.txt
+#!TODOS.md
+
+# Source code
+!src/
+!src/**
+
+# Tests
+!tests/
+!tests/**
+
+# Documentation
+!doc/
+!doc/**
+
+# Data (uncomment if you want to track data files)
+# !data/
+# !data/**
+
+# Git and project files
+!.gitignore
+
+# Python cache
+__pycache__/
+
+# macOS files
+.DS_Store
+
+# Python egg-info
+*.egg-info/

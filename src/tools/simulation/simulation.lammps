@@ -1,0 +1,71 @@
+# Standard LAMMPS script for polymer simulations
+variable pdump equal 1000
+variable prun equal 50000
+variable pequi equal 5000
+variable eps equal 0.1
+variable random equal 42
+variable time_step equal 0.01
+
+shell mkdir ${dump_path}
+log ${dump_path}/log.lammps
+
+
+units		lj
+atom_style	full
+dimension	3
+neighbor	3.0 bin
+neigh_modify	every 3 delay 0 check yes
+boundary p p p
+
+pair_style   lj/cut 2.5
+bond_style fene
+angle_style cosine
+
+read_data ${datafile_path}
+
+#Initialize temperature
+
+velocity all create 1.0 ${random} dist gaussian mom yes rot yes
+
+
+#Specify of Potential Energy Coefficients
+
+#cosine angle
+angle_coeff * 0.0
+#Bond (fene)
+bond_coeff 1 30.0 1.5 1.0 1.0
+
+#vdw potential
+pair_modify   shift yes
+pair_coeff  * * ${eps} 1.0 2.5
+special_bonds fene
+
+# need solvent-solvent, solvent-polymer, polymer-polymer interactions
+# maybe solvent-polymer as input variable
+
+# equilibium steps
+fix 1 all langevin 1.0 1.0 1.0 ${random}
+fix 2 all nve/limit 0.1
+
+thermo          ${pdump}
+thermo_style custom step temp epair emol etotal press cpu time
+thermo_modify norm yes flush yes
+timestep     ${time_step}
+run ${pequi}
+
+
+# production steps
+reset_timestep 0
+unfix 2
+fix 2 all nve
+
+
+shell mkdir ${dump_path}/coord
+
+#dump 1 all image ${pdump} ./image/box.*.ppm type type zoom 1.2
+#dump_modify 1 backcolor white boxcolor black flush yes pad 9
+
+dump 2 all custom ${pdump} ${dump_path}/coord/dump.*.txt id type x y z xu yu zu
+dump_modify 2 flush yes pad 9
+
+run ${prun}

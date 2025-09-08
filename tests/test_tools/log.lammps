@@ -1,0 +1,13 @@
+LAMMPS (29 Aug 2024 - Update 1)
+# Standard LAMMPS script for polymer simulations
+variable pdump equal 1000
+variable prun equal 50000
+variable pequi equal 5000
+variable eps equal 0.1
+variable random equal 42
+variable time_step equal 0.01
+
+shell mkdir ${dump_path}
+shell mkdir /Users/ldq/Work/ToPolyAgent/data/test/system_star_polymer_8_4
+log ${dump_path}/log.lammps
+log /Users/ldq/Work/ToPolyAgent/data/test/system_star_polymer_8_4/log.lammps
