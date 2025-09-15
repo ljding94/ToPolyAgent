@@ -8,6 +8,6 @@ variable random equal 42
 variable time_step equal 0.01
 
 shell mkdir ${dump_path}
-shell mkdir /Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.5_10
+shell mkdir /Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.3_10
 log ${dump_path}/log.lammps
-log /Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.5_10/log.lammps
+log /Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.3_10/log.lammps

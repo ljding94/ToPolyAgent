@@ -69,3 +69,5 @@ dump 2 all custom ${pdump} ${dump_path}/coord/dump.*.txt id type x y z xu yu zu
 dump_modify 2 flush yes pad 9
 
 run ${prun}
+
+write_data ${dump_path}/final_state.data nocoeff

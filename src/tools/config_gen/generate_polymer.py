@@ -1,6 +1,12 @@
 import numpy as np
 import os
 
+
+#####################################################################
+# some useful helper functions
+####################################################################
+
+
 def generate_gaussian_chain(chain_length, bond_length, angle_mean, angle_std):
     """
     Generate a Gaussian chain with specified bond length and angle distribution.
@@ -92,9 +98,63 @@ def generate_perpendicular_direction(reference_vector):
     result = perp * np.cos(angle) + perp2 * np.sin(angle)
     return result / np.linalg.norm(result)
 
+
+def rotation_matrix_from_vectors(vec1, vec2):
+    """
+    Create a rotation matrix that rotates vec1 to align with vec2.
+
+    Parameters:
+    - vec1: np.array, source vector
+    - vec2: np.array, target vector
+
+    Returns:
+    - np.array: 3x3 rotation matrix
+    """
+    vec1 = vec1 / np.linalg.norm(vec1)
+    vec2 = vec2 / np.linalg.norm(vec2)
+
+    # Cross product to find rotation axis
+    cross = np.cross(vec1, vec2)
+    cross_norm = np.linalg.norm(cross)
+
+    # If vectors are already aligned (or anti-aligned), return identity or 180° rotation
+    if cross_norm < 1e-10:
+        if np.dot(vec1, vec2) > 0:
+            return np.eye(3)  # Already aligned
+        else:
+            # 180° rotation around arbitrary perpendicular axis
+            perp = np.array([1.0, 0.0, 0.0])
+            if abs(np.dot(vec1, perp)) > 0.9:
+                perp = np.array([0.0, 1.0, 0.0])
+            perp = perp - np.dot(vec1, perp) * vec1
+            perp = perp / np.linalg.norm(perp)
+            return np.array(
+                [
+                    [2 * perp[0] ** 2 - 1, 2 * perp[0] * perp[1], 2 * perp[0] * perp[2]],
+                    [2 * perp[0] * perp[1], 2 * perp[1] ** 2 - 1, 2 * perp[1] * perp[2]],
+                    [2 * perp[0] * perp[2], 2 * perp[1] * perp[2], 2 * perp[2] ** 2 - 1],
+                ]
+            )
+
+    # Rodrigues' rotation formula
+    cos_angle = np.dot(vec1, vec2)
+    sin_angle = cross_norm
+
+    # Skew-symmetric matrix for cross product
+    K = np.array([[0, -cross[2], cross[1]], [cross[2], 0, -cross[0]], [-cross[1], cross[0], 0]])
+
+    # Rodrigues' formula: R = I + sinθ·K + (1-cosθ)·K²
+    identity_matrix = np.eye(3)
+    K2 = np.dot(K, K)
+
+    rotation_matrix = identity_matrix + sin_angle * K + (1 - cos_angle) * K2
+    return rotation_matrix
+
+
 #####################################################################
 # generate actual polymer configurations
 ####################################################################
+
 
 def generate_linear_polymer_config(chain_length, box_size=50.0):
     """
@@ -441,60 +501,6 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     return datafile_path
 
 
-def rotation_matrix_from_vectors(vec1, vec2):
-    """
-    Create a rotation matrix that rotates vec1 to align with vec2.
-
-    Parameters:
-    - vec1: np.array, source vector
-    - vec2: np.array, target vector
-
-    Returns:
-    - np.array: 3x3 rotation matrix
-    """
-    vec1 = vec1 / np.linalg.norm(vec1)
-    vec2 = vec2 / np.linalg.norm(vec2)
-
-    # Cross product to find rotation axis
-    cross = np.cross(vec1, vec2)
-    cross_norm = np.linalg.norm(cross)
-
-    # If vectors are already aligned (or anti-aligned), return identity or 180° rotation
-    if cross_norm < 1e-10:
-        if np.dot(vec1, vec2) > 0:
-            return np.eye(3)  # Already aligned
-        else:
-            # 180° rotation around arbitrary perpendicular axis
-            perp = np.array([1.0, 0.0, 0.0])
-            if abs(np.dot(vec1, perp)) > 0.9:
-                perp = np.array([0.0, 1.0, 0.0])
-            perp = perp - np.dot(vec1, perp) * vec1
-            perp = perp / np.linalg.norm(perp)
-            return np.array([
-                [2*perp[0]**2 - 1, 2*perp[0]*perp[1], 2*perp[0]*perp[2]],
-                [2*perp[0]*perp[1], 2*perp[1]**2 - 1, 2*perp[1]*perp[2]],
-                [2*perp[0]*perp[2], 2*perp[1]*perp[2], 2*perp[2]**2 - 1]
-            ])
-
-    # Rodrigues' rotation formula
-    cos_angle = np.dot(vec1, vec2)
-    sin_angle = cross_norm
-
-    # Skew-symmetric matrix for cross product
-    K = np.array([
-        [0, -cross[2], cross[1]],
-        [cross[2], 0, -cross[0]],
-        [-cross[1], cross[0], 0]
-    ])
-
-    # Rodrigues' formula: R = I + sinθ·K + (1-cosθ)·K²
-    identity_matrix = np.eye(3)
-    K2 = np.dot(K, K)
-
-    rotation_matrix = identity_matrix + sin_angle * K + (1 - cos_angle) * K2
-    return rotation_matrix
-
-
 def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     """
     Generates LAMMPS datafile for a star polymer.
@@ -552,11 +558,7 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
             # For more arms, distribute evenly on sphere
             phi = np.arccos(1 - 2 * (arm_idx + 0.5) / num_arms)  # Golden angle spiral
             theta = np.pi * (1 + np.sqrt(5)) * arm_idx
-            direction = np.array([
-                np.sin(phi) * np.cos(theta),
-                np.sin(phi) * np.sin(theta),
-                np.cos(phi)
-            ])
+            direction = np.array([np.sin(phi) * np.cos(theta), np.sin(phi) * np.sin(theta), np.cos(phi)])
 
         direction = direction / np.linalg.norm(direction)
 

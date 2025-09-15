@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     datafile_path = "/Users/ldq/Work/ToPolyAgent/data/test/system_linear_polymer_30.data"
 
-    datafile_path = "/Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.5_10.data"
+    datafile_path = "/Users/ldq/Work/ToPolyAgent/data/test/system_brush_polymer_50_0.3_10.data"
 
     dump_path = datafile_path.replace(".data", "")
     run_lammps(dump_path, datafile_path)
