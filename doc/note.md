@@ -40,3 +40,12 @@ human_tool? request further human input if needed
 search agent with serper search tool?
 
 
+
+
+20250917
+
+solvent:
+when pp=ss=0.5
+good solvent: sp>0.5
+bad solvent: sp<0.5
+idea solvent: no idea ~ sp0.5

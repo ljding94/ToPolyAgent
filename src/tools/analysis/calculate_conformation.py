@@ -36,12 +36,16 @@ def calculate_persistence_length(positions, bonds, atom_ids, polymer_type="linea
     - positions: Atom positions (n_atoms, 3)
     - bonds: Bond connectivity array (n_bonds, 3) with [atom1_id, atom2_id, bond_type]
     - atom_ids: Array of atom IDs corresponding to positions
-    - polymer_type: Type of polymer ("linear", "ring", "brush", "star")
+    - polymer_type: Type of polymer ("linear", "ring", "brush", "star", "dendrimer")
     - atom_types: Array of atom types corresponding to atom_ids
 
     Returns:
-    - lp: Persistence length (float for linear/ring, dict for others)
+    - lp: Persistence length (float for linear/ring, dict for others, None for dendrimer)
     """
+    if polymer_type == "dendrimer":
+        # Persistence length not well-defined for dendrimers due to branching
+        return None
+
     if len(bonds) == 0:
         raise ValueError("No bonds found. Cannot calculate persistence length.")
 
@@ -87,9 +91,6 @@ def calculate_persistence_length(positions, bonds, atom_ids, polymer_type="linea
         # For brush and star polymers, calculate for each chain
         if atom_types is None:
             raise ValueError("atom_types must be provided for brush and star polymers")
-
-        # Ensure atom_types are integers
-        atom_types = [int(t) for t in atom_types]
 
         chains = get_chains(bonds, atom_ids, polymer_type, atom_types)
         lps = []
@@ -158,17 +159,17 @@ def get_chains(bonds, atom_ids, polymer_type, atom_types):
     chains = []
     if polymer_type == "brush":
         # Backbone: connected type 1 atoms
-        backbone_atoms = [aid for aid in atom_ids if id_to_type[aid] == 1]
+        backbone_atoms = [aid for aid in atom_ids if id_to_type[aid] == '1']
         if backbone_atoms:
             chain = sort_chain(backbone_atoms, adj)
             chains.append(chain)
 
     elif polymer_type == "star":
-        # First arm: first connected component of type 2
-        arm_atoms = [aid for aid in atom_ids if id_to_type[aid] == 2]
+        # One arm: first connected component of type 2
+        arm_atoms = [aid for aid in atom_ids if id_to_type[aid] == '2']
         if arm_atoms:
             visited = set()
-            chain = dfs_chain(arm_atoms[0], adj, visited, id_to_type, 2)
+            chain = dfs_chain(arm_atoms[0], adj, visited, id_to_type, '2')
             if len(chain) > 1:
                 sorted_chain = sort_chain(chain, adj)
                 chains.append(sorted_chain)
@@ -226,6 +227,57 @@ def sort_chain(atoms, adj):
     return chain
 
 
+def calculate_end_to_end_distance(positions, atom_ids, bonds, polymer_type="linear", atom_types=None):
+    """
+    Calculate the end-to-end distance for given polymer type.
+
+    Parameters:
+    - positions: Atom positions (n_atoms, 3)
+    - atom_ids: Array of atom IDs corresponding to positions
+    - bonds: Bond connectivity array (n_bonds, 3) with [atom1_id, atom2_id, bond_type]
+    - polymer_type: Type of polymer ("linear", "ring", "brush", "star", "dendrimer")
+    - atom_types: Array of atom types corresponding to atom_ids (required for brush and star)
+
+    Returns:
+    - distance: End-to-end distance (float for linear, dict for brush/star, None for ring/dendrimer)
+    """
+    if polymer_type in ["ring", "dendrimer"]:
+        return None
+
+    if atom_types is None and polymer_type in ["brush", "star"]:
+        raise ValueError("atom_types must be provided for brush and star polymers")
+
+    chains = get_chains(bonds, atom_ids, polymer_type, atom_types)
+    if not chains:
+        return None
+
+    if polymer_type == "linear":
+        chain = chains[0]
+        if len(chain) < 2:
+            return None
+
+        id_to_index = {atom_id: i for i, atom_id in enumerate(atom_ids)}
+        pos1 = positions[id_to_index[chain[0]]]
+        pos2 = positions[id_to_index[chain[-1]]]
+        distance = np.linalg.norm(pos2 - pos1)
+        return distance
+    else:
+        # for brush and star
+        distances = []
+        id_to_index = {atom_id: i for i, atom_id in enumerate(atom_ids)}
+        for chain in chains:
+            if len(chain) < 2:
+                continue
+            pos1 = positions[id_to_index[chain[0]]]
+            pos2 = positions[id_to_index[chain[-1]]]
+            dist = np.linalg.norm(pos2 - pos1)
+            distances.append(dist)
+        if not distances:
+            return None
+        overall = np.mean(distances)
+        return {"overall": overall, "chains": distances}
+
+
 def calculate_diffusion_coefficient(trajectory_positions, steps, timestep=0.01*1000):
     """
     Calculate the diffusion coefficient from trajectory positions.
@@ -242,8 +294,8 @@ def calculate_diffusion_coefficient(trajectory_positions, steps, timestep=0.01*1
     com_trajectory = np.mean(trajectory_positions, axis=1)
 
     # Calculate mean square displacement
-    msd = []
-    for dt in range(1, len(com_trajectory)):
+    msd = [0]  # for dts=0 case
+    for dt in range(1, len(com_trajectory)//2):
         displacements = com_trajectory[dt:] - com_trajectory[:-dt]
         sq_disp = np.sum(displacements**2, axis=1)
         msd.append(np.mean(sq_disp))
@@ -252,8 +304,9 @@ def calculate_diffusion_coefficient(trajectory_positions, steps, timestep=0.01*1
     dts = (steps[1:] - steps[0]) * timestep  # Convert steps to time
 
     # Fit linear: MSD = 6 * D * t
+    nfit = len(msd)//2
     if len(dts) > 1 and len(msd) > 1:
-        slope, intercept, r_value, p_value, std_err = linregress(dts[:20], msd[:20])  # use the first 20 points for fitting
+        slope, intercept, r_value, p_value, std_err = linregress(dts[:nfit], msd[:nfit])  # use the first 1/3 points for fitting
         D = slope / 6.0  # for 3D
     else:
         D = 0.0

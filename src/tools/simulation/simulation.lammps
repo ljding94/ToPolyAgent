@@ -1,10 +1,10 @@
 # Standard LAMMPS script for polymer simulations
 variable pdump equal 1000
-variable prun equal 50000
-variable pequi equal 5000
-variable eps equal 0.1
+variable pequi equal 20000
 variable random equal 42
 variable time_step equal 0.01
+
+#variable eps equal 0.1
 
 shell mkdir ${dump_path}
 log ${dump_path}/log.lammps
@@ -24,26 +24,36 @@ angle_style cosine
 read_data ${datafile_path}
 
 #Initialize temperature
-
 velocity all create 1.0 ${random} dist gaussian mom yes rot yes
 
 
 #Specify of Potential Energy Coefficients
-
 #cosine angle
 angle_coeff * 0.0
 #Bond (fene)
 bond_coeff 1 30.0 1.5 1.0 1.0
 
-#vdw potential
+#vdw potential /previous one
+#pair_modify   shift yes
+#pair_coeff  * * ${eps} 1.0 2.5
+#special_bonds fene
+
+# VdW potential (LJ with configurable epsilons)
+# Assuming atom types: 1=polymer backbone, 2=side chains, 3=solvent
 pair_modify   shift yes
-pair_coeff  * * ${eps} 1.0 2.5
+pair_coeff 1 1 ${eps_pp} 1.0 2.5  # Polymer-polymer (backbone-backbone)
+pair_coeff 2 2 ${eps_pp} 1.0 2.5  # Side chains-side chains (if present)
+pair_coeff 1 2 ${eps_pp} 1.0 2.5  # Backbone-side chains
+pair_coeff 3 3 ${eps_ss} 1.0 2.5  # Solvent-solvent
+pair_coeff 1 3 ${eps_sp} 1.0 2.5  # Backbone-solvent
+pair_coeff 2 3 ${eps_sp} 1.0 2.5  # Side chains-solvent
 special_bonds fene
 
-# need solvent-solvent, solvent-polymer, polymer-polymer interactions
-# maybe solvent-polymer as input variable
 
-# equilibium steps
+# Equilibrium steps (use conditional for thermostat/ensemble)
+# First, set base dynamics (nve/limit for initial equilibration)
+
+# thermalization, remove overlaps
 fix 1 all langevin 1.0 1.0 1.0 ${random}
 fix 2 all nve/limit 0.1
 
@@ -52,12 +62,21 @@ thermo_style custom step temp epair emol etotal press cpu time
 thermo_modify norm yes flush yes
 timestep     ${time_step}
 run ${pequi}
-
-
-# production steps
-reset_timestep 0
+unfix 1
 unfix 2
-fix 2 all nve
+
+# some thermalization after fixing overlaps
+run ${prun}
+# half for equilibrium, half for measurement
+
+# Apply thermostat conditionally
+reset_timestep 0
+if "${thermostat} == langevin" then &
+  "fix 1 all langevin 1.0 1.0 1.0 ${random}" &
+  "fix 2 all nve" &
+
+if "${thermostat} == nosehoover" then &
+ "fix 1 all nvt temp 1.0 1.0 0.1" &
 
 
 shell mkdir ${dump_path}/coord

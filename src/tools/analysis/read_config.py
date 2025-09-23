@@ -2,6 +2,25 @@ import MDAnalysis as mda
 import numpy as np
 import glob
 from collections import defaultdict
+import json
+
+
+def read_metadata(data_file):
+    """
+    Read metadata from LAMMPS data file header.
+
+    Parameters:
+    - data_file: Path to LAMMPS data file
+
+    Returns:
+    - metadata: Dictionary with metadata, or empty dict if not found
+    """
+    with open(data_file, 'r') as f:
+        first_line = f.readline().strip()
+        if first_line.startswith("# Metadata:"):
+            metadata_str = first_line[len("# Metadata:"):].strip()
+            return json.loads(metadata_str)
+    return {}
 
 
 def identify_polymer_atoms(atoms, bonds):
@@ -69,7 +88,10 @@ def read_lammps_data(data_file):
     - polymer_atoms: Dictionary with polymer atom information (id, type, position, etc.)
     - bonds: List of bond tuples (atom1_id, atom2_id, bond_type)
     - box: Box dimensions
+    - metadata: Dictionary with metadata
     """
+    metadata = read_metadata(data_file)
+
     u = mda.Universe(data_file, format='DATA')
 
     # Extract all atom information first
@@ -117,7 +139,7 @@ def read_lammps_data(data_file):
         'angles': u.dimensions[3:]
     }
 
-    return polymer_atoms, all_atoms, bonds, box
+    return polymer_atoms, all_atoms, bonds, box, metadata
 
 
 def read_lammps_polymer_trajectory(dump_files, polymer_atom_ids=None):
@@ -198,9 +220,10 @@ def read_simulation_data(data_file, dump_pattern):
     - bonds: Polymer bond connectivity
     - trajectory: Polymer trajectory data
     - box: Box information
+    - metadata: Metadata from data file
     """
     # Read topology and identify polymer atoms
-    polymer_atoms, all_atoms, bonds, box = read_lammps_data(data_file)
+    polymer_atoms, all_atoms, bonds, box, metadata = read_lammps_data(data_file)
 
     # Get polymer atom IDs for trajectory filtering
     polymer_atom_ids = set(polymer_atoms['ids'])
@@ -208,4 +231,4 @@ def read_simulation_data(data_file, dump_pattern):
     # Read trajectory with polymer atom filtering
     polymer_trajectory = read_lammps_polymer_trajectory(dump_pattern, polymer_atom_ids)
 
-    return polymer_atoms, all_atoms, bonds, polymer_trajectory, box
+    return polymer_atoms, all_atoms, bonds, polymer_trajectory, box, metadata

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import json
 
 
 #####################################################################
@@ -167,6 +168,13 @@ def generate_linear_polymer_config(chain_length, box_size=50.0):
     Returns:
     - str: path to the generated datafile
     """
+    # Metadata
+    metadata = {
+        "type": "linear",
+        "chain_length": chain_length,
+        "box_size": box_size
+    }
+
     # Initialize lists
     positions = []
     bonds = []
@@ -178,7 +186,7 @@ def generate_linear_polymer_config(chain_length, box_size=50.0):
     # Gaussian chain parameters
     bond_length = 1.0
     angle_mean = 0.0
-    angle_std = np.pi * 30.0 / 180.0  # 30 degree standard deviation
+    angle_std = np.pi * 60.0 / 180.0  # 60 degree standard deviation
 
     # Generate chain as Gaussian chain
     chain_positions = generate_gaussian_chain(chain_length, bond_length, angle_mean, angle_std)
@@ -206,8 +214,9 @@ def generate_linear_polymer_config(chain_length, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), f"linear_polymer_{chain_length}.data")
+    datafile_path = os.path.join(os.getcwd(), "polymer_linear.data")
     with open(datafile_path, "w") as f:
+        f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Linear polymer datafile\n")
         f.write(f"{len(positions)} atoms\n")
         f.write(f"{len(bonds)} bonds\n")
@@ -250,6 +259,13 @@ def generate_ring_polymer_config(ring_length, box_size=50.0):
     """
     if ring_length < 3:
         raise ValueError("Ring length must be at least 3 for a valid ring polymer")
+
+    # Metadata
+    metadata = {
+        "type": "ring",
+        "ring_length": ring_length,
+        "box_size": box_size
+    }
 
     # Initialize lists
     positions = []
@@ -308,8 +324,9 @@ def generate_ring_polymer_config(ring_length, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), f"ring_polymer_{ring_length}.data")
+    datafile_path = os.path.join(os.getcwd(), "polymer_ring.data")
     with open(datafile_path, "w") as f:
+        f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Ring polymer datafile\n")
         f.write(f"{len(positions)} atoms\n")
         f.write(f"{len(bonds)} bonds\n")
@@ -352,6 +369,15 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     Returns:
     - str: path to the generated datafile
     """
+    # Metadata
+    metadata = {
+        "type": "brush",
+        "backbone_length": backbone_length,
+        "grafting_density": grafting_density,
+        "side_chain_length": side_chain_length,
+        "box_size": box_size
+    }
+
     # Initialize lists
     positions = []
     bonds = []
@@ -363,7 +389,7 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     # Gaussian chain parameters
     bond_length = 1.0
     backbone_angle_mean = 0.0
-    backbone_angle_std = np.pi * 30.0 / 180.0  # 10 degree standard deviation
+    backbone_angle_std = np.pi * 60.0 / 180.0  # 10 degree standard deviation
     side_chain_angle_mean = 0.0
     side_chain_angle_std = np.pi * 60.0 / 180.0  # More flexible side chains
 
@@ -429,6 +455,13 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
             # Generate perpendicular direction for side chain
             perp_dir = generate_perpendicular_direction(backbone_dir)
 
+            # Rotate side chain to align with perp_dir
+            if side_chain_length >= 2:
+                initial_dir = np.array([1.0, 0.0, 0.0])  # Direction from first to second atom
+                rot_matrix = rotation_matrix_from_vectors(initial_dir, perp_dir)
+                # Apply rotation to all side chain positions
+                side_chain_atoms = [np.dot(rot_matrix, pos) for pos in side_chain_atoms]
+
             # Position side chain atoms
             for j, chain_pos in enumerate(side_chain_atoms):
                 # Offset from backbone and rotate to perpendicular direction
@@ -469,8 +502,9 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), f"brush_polymer_{backbone_length}_{grafting_density}_{side_chain_length}.data")
+    datafile_path = os.path.join(os.getcwd(), "polymer_brush.data")
     with open(datafile_path, "w") as f:
+        f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Brush polymer datafile\n")
         f.write(f"{len(positions)} atoms\n")
         f.write(f"{len(bonds)} bonds\n")
@@ -518,6 +552,14 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     if arm_length < 1:
         raise ValueError("Arm length must be at least 1")
 
+    # Metadata
+    metadata = {
+        "type": "star",
+        "arm_length": arm_length,
+        "num_arms": num_arms,
+        "box_size": box_size
+    }
+
     # Initialize lists
     positions = []
     bonds = []
@@ -529,7 +571,7 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     # Gaussian chain parameters
     bond_length = 1.0
     angle_mean = np.pi * 0.0
-    angle_std = np.pi * 30.0 / 180.0  # 30 degree standard deviation
+    angle_std = np.pi * 60.0 / 180.0  # 30 degree standard deviation
 
     # Core atom at origin
     core_pos = np.array([0.0, 0.0, 0.0])
@@ -623,8 +665,9 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), f"star_polymer_{arm_length}_{num_arms}.data")
+    datafile_path = os.path.join(os.getcwd(), "polymer_star.data")
     with open(datafile_path, "w") as f:
+        f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Star polymer datafile\n")
         f.write(f"{len(positions)} atoms\n")
         f.write(f"{len(bonds)} bonds\n")
@@ -655,6 +698,183 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     return datafile_path
 
 
-def generate_dendrimer_config(generations, branching_factor, box_size=50.0):
-    # Similar implementation
-    pass
+
+def generate_dendrimer_config(generations, branching_factor, spacer=5, box_size=50.0):
+    """
+    Generates LAMMPS datafile for a dendrimer.
+    Parameters:
+    - generations: int, number of generations (layers) in the dendrimer
+    - branching_factor: int, number of branches per node (typically 2 or 3)
+    - spacer: int, number of atoms per branch segment (1 = current behavior, >1 adds more atoms per line)
+    - box_size: float, size of simulation box
+    Returns:
+    - str: path to the generated datafile
+    """
+    if generations < 1:
+        raise ValueError("Generations must be at least 1")
+    if branching_factor < 2:
+        raise ValueError("Branching factor must be at least 2")
+    if spacer < 1:
+        raise ValueError("Spacer must be at least 1")
+
+    # Metadata
+    metadata = {
+        "type": "dendrimer",
+        "generations": generations,
+        "branching_factor": branching_factor,
+        "spacer": spacer,
+        "box_size": box_size
+    }
+
+    # Initialize lists
+    positions = []
+    bonds = []
+    atom_id = 1
+    bond_id = 1
+    # Angles will be added later
+
+    # Bond length (scale slightly with generation for better spreading, optional)
+    base_bond_length = 1.0
+
+    # Core atom (generation 0)
+    core_pos = np.array([0.0, 0.0, 0.0])
+    positions.append((atom_id, 1, 1, 0, core_pos[0], core_pos[1], core_pos[2]))  # Molecule 1, type 1, charge 0
+    atom_id += 1
+
+    # Keep track of branch points (parents) in each generation
+    # Each entry: (atom_id, position, incoming_direction)
+    gen_branch_points = [[(1, core_pos, np.array([0.0, 0.0, 1.0]))]]  # Generation 0: core has arbitrary incoming direction
+
+    # Build dendrimer generation by generation
+    for gen in range(1, generations + 1):
+        gen_branch_points.append([])
+        parent_atoms = gen_branch_points[gen - 1]
+        for parent_id, parent_pos, incoming_dir in parent_atoms:
+            # Number of new branches from this parent
+            if gen == 1:
+                num_new = branching_factor  # From core
+            else:
+                num_new = branching_factor - 1  # From branch points
+
+            # Generate directions distributed around the incoming direction
+            directions = []
+            if gen == 1:
+                # For the first generation from core, distribute uniformly in 3D space
+                if num_new == 1:
+                    # Single branch: random direction
+                    dir_vec = np.random.normal(0, 1, 3)
+                    dir_vec /= np.linalg.norm(dir_vec)
+                    directions.append(dir_vec)
+                else:
+                    # Multiple branches: use golden spiral for uniform distribution on sphere
+                    golden_ratio = (1 + 5**0.5) / 2
+                    for i in range(num_new):
+                        theta = 2 * np.pi * i / golden_ratio
+                        phi = np.arccos(1 - 2 * (i + 0.5) / num_new)
+                        dir_vec = np.array([
+                            np.sin(phi) * np.cos(theta),
+                            np.sin(phi) * np.sin(theta),
+                            np.cos(phi)
+                        ])
+                        directions.append(dir_vec)
+            else:
+                # For subsequent generations, distribute around the incoming direction
+                if num_new == 1:
+                    # Single branch: random direction perpendicular to incoming
+                    perp_dir = generate_perpendicular_direction(incoming_dir)
+                    directions.append(perp_dir)
+                else:
+                    # Multiple branches: distribute around incoming direction using spherical coordinates
+                    for i in range(num_new):
+                        # Use golden angle for even distribution
+                        golden_angle = 2 * np.pi * i / ((1 + np.sqrt(5)) / 2)
+                        # Elevation angle from the incoming direction plane
+                        elevation = np.arccos(1 - 2 * (i + 0.5) / num_new) - np.pi/2  # Center around equator
+
+                        # Create rotation matrix to align with incoming direction
+                        # First, create a reference direction perpendicular to incoming
+                        ref_dir = generate_perpendicular_direction(incoming_dir)
+                        ref_dir2 = np.cross(incoming_dir, ref_dir)
+
+                        # Rotate around incoming direction by golden_angle, then tilt by elevation
+                        cos_golden = np.cos(golden_angle)
+                        sin_golden = np.sin(golden_angle)
+                        cos_elev = np.cos(elevation)
+                        sin_elev = np.sin(elevation)
+
+                        # Direction in the plane perpendicular to incoming
+                        perp_component = cos_golden * ref_dir + sin_golden * ref_dir2
+                        # Combine with elevation
+                        dir_vec = cos_elev * perp_component + sin_elev * incoming_dir
+                        dir_vec = dir_vec / np.linalg.norm(dir_vec)
+                        directions.append(dir_vec)
+
+            # For each new branch: add a chain of 'spacer' atoms along the direction (straight line)
+            for dir_vec in directions:
+                current_id = parent_id
+                current_pos = parent_pos
+                branch_direction = dir_vec  # Store the outgoing direction for the branch point
+                for s in range(spacer):
+                    # Scale bond length mildly with gen to fan out (helps with overlaps)
+                    bond_length = base_bond_length * (1 + 0.02 * gen)  # Optional: adjust 0.1 for more/less spreading
+                    new_pos = current_pos + branch_direction * bond_length
+                    positions.append((atom_id, 1, 2, 0, new_pos[0], new_pos[1], new_pos[2]))  # Type 2
+                    # Bond to previous
+                    bonds.append((bond_id, 1, current_id, atom_id))
+                    bond_id += 1
+                    # Update current
+                    current_id = atom_id
+                    current_pos = new_pos
+                    atom_id += 1
+                # The last atom in the chain is the new branch point
+                gen_branch_points[gen].append((current_id, current_pos, branch_direction))
+
+    # Now add angles correctly using adjacency list
+    angles = []
+    angle_id = 1
+    # Build neighbors dict
+    neighbors = {i: [] for i in range(1, atom_id)}
+    for _, _, a1, a2 in bonds:
+        neighbors[a1].append(a2)
+        neighbors[a2].append(a1)
+    # For each atom (central), add angles for pairs of neighbors
+    for central in neighbors:
+        neigh_list = sorted(neighbors[central])  # Sort to avoid duplicates
+        for i in range(len(neigh_list)):
+            for j in range(i + 1, len(neigh_list)):
+                angles.append((angle_id, 1, neigh_list[i], central, neigh_list[j]))
+                angle_id += 1
+
+    # Center the dendrimer at origin
+    if positions:
+        com = np.mean([[p[4], p[5], p[6]] for p in positions], axis=0)
+        positions = [(p[0], p[1], p[2], p[3], p[4] - com[0], p[5] - com[1], p[6] - com[2]) for p in positions]
+
+    # Write datafile
+    datafile_path = os.path.join(os.getcwd(), "polymer_dendrimer.data")
+    with open(datafile_path, "w") as f:
+        f.write(f"# Metadata: {json.dumps(metadata)}\n")
+        f.write("# Dendrimer datafile\n")
+        f.write(f"{len(positions)} atoms\n")
+        f.write(f"{len(bonds)} bonds\n")
+        f.write(f"{len(angles)} angles\n")
+        f.write("2 atom types\n")
+        f.write("1 bond types\n")
+        f.write("1 angle types\n")
+        f.write(f"{-box_size/2} {box_size/2} xlo xhi\n")
+        f.write(f"{-box_size/2} {box_size/2} ylo yhi\n")
+        f.write(f"{-box_size/2} {box_size/2} zlo zhi\n")
+        f.write("\nMasses\n\n")
+        f.write("1 1.00\n")  # Core
+        f.write("2 1.00\n")  # Others
+        f.write("Atoms #full\n\n")
+        for atom in positions:
+            f.write(f"{atom[0]} {atom[1]} {atom[2]} {atom[3]} {atom[4]:.6f} {atom[5]:.6f} {atom[6]:.6f}\n")
+        f.write("\nBonds\n\n")
+        for bond in bonds:
+            f.write(f"{bond[0]} {bond[1]} {bond[2]} {bond[3]}\n")
+        f.write("\nAngles\n\n")
+        for angle in angles:
+            f.write(f"{angle[0]} {angle[1]} {angle[2]} {angle[3]} {angle[4]}\n")
+
+    return datafile_path

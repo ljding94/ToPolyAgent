@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import json
 
 
 def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
@@ -14,6 +15,16 @@ def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
     Returns:
     - str: path to full system datafile
     """
+    # Read polymer metadata
+    polymer_metadata = {}
+    with open(polymer_datafile, 'r') as f:
+        first_line = f.readline().strip()
+        if first_line.startswith("# Metadata:"):
+            metadata_str = first_line[len("# Metadata:"):].strip()
+            polymer_metadata = json.loads(metadata_str)
+
+    polymer_type = polymer_metadata.get("type", "unknown")
+
     # Read polymer datafile
     polymer_positions = []
     polymer_bonds = []
@@ -130,10 +141,18 @@ def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
 
     # Create system datafile
     dirname = os.path.dirname(polymer_datafile)
-    basename = os.path.basename(polymer_datafile)
-    system_datafile = os.path.join(dirname, f"system_{basename}")
+    system_datafile = os.path.join(dirname, f"system_{polymer_type}.data")
+
+    # System metadata
+    system_metadata = polymer_metadata.copy()
+    system_metadata.update({
+        "solvent_density": solvent_density,
+        "num_solvent": len(solvent_positions),
+        "box_size": box_size
+    })
 
     with open(system_datafile, 'w') as f:
+        f.write(f"# Metadata: {json.dumps(system_metadata)}\n")
         f.write("# Polymer + Solvent system datafile\n")
         f.write(f"{len(polymer_positions) + len(solvent_positions)} atoms\n")
         f.write(f"{len(polymer_bonds)} bonds\n")

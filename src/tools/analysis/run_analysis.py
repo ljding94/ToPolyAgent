@@ -21,6 +21,65 @@ sys.path.insert(0, project_root)
 from src.tools.analysis import read_simulation_data, calculate_radius_of_gyration, calculate_persistence_length, calculate_diffusion_coefficient, calculate_pq
 
 
+def analyze_conformation(atoms, bonds, trajectory, box, polymer_type="linear"):
+    """
+    Analyze polymer conformation from simulation data structures.
+
+    Parameters:
+    - atoms: Polymer atoms dict
+    - bonds: Bonds array
+    - trajectory: Trajectory dict
+    - box: Box dict
+    - polymer_type: Type of polymer
+
+    Returns:
+    - results: Dict with analysis results
+    """
+    from src.tools.analysis.calculate_conformation import calculate_end_to_end_distance
+
+    results = {}
+
+    # Radius of gyration
+    rg_traj = calculate_radius_of_gyration(trajectory['polymer_atom_positions'])
+    results['radius_of_gyration'] = rg_traj
+    results['mean_radius_of_gyration'] = np.mean(rg_traj)
+
+    # End-to-end distance
+    e2e_traj = []
+    for frame_positions in trajectory['polymer_atom_positions']:
+        e2e = calculate_end_to_end_distance(frame_positions, trajectory['polymer_atom_ids'], bonds, polymer_type, atoms['types'])
+        e2e_traj.append(e2e)
+    results['end_to_end_distance'] = e2e_traj
+    valid_e2e = [e for e in e2e_traj if e is not None]
+    results['mean_end_to_end_distance'] = np.mean(valid_e2e) if valid_e2e else None
+
+    # Persistence length
+    lp_traj = []
+    for frame_positions in trajectory['polymer_atom_positions']:
+        lp = calculate_persistence_length(frame_positions, bonds, trajectory['polymer_atom_ids'], polymer_type, atoms['types'])
+        if isinstance(lp, dict):
+            lp_traj.append(lp["overall"])
+        else:
+            lp_traj.append(lp)
+    results['persistence_length'] = lp_traj
+    results['mean_persistence_length'] = np.mean([lp for lp in lp_traj if lp is not None and not np.isnan(lp)])
+
+    # Diffusion coefficient
+    D, msd, dts = calculate_diffusion_coefficient(trajectory['polymer_atom_positions'], trajectory['steps'], 0.01 * 1000)
+    results['diffusion_coefficient'] = float(D)
+    results['msd'] = msd.tolist() if msd is not None else None
+
+    # Scattering
+    Rg = results['mean_radius_of_gyration']
+    q_value = np.logspace(-1, 1, 100) * 2 * np.pi / Rg
+    all_pq = calculate_pq(trajectory['polymer_atom_positions'], q_value)
+    results['scattering_q'] = q_value.tolist()
+    results['scattering_pq'] = all_pq.tolist()
+    results['mean_scattering_pq'] = np.mean(all_pq, axis=0).tolist()
+
+    return results
+
+
 def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, Any]:
     """
     Run complete conformational analysis on LAMMPS simulation data.
@@ -35,8 +94,10 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
     results = {"metadata": {"datafile_path": datafile_path, "dump_pattern": dump_pattern, "success": False, "error": None}, "system_info": {}, "analysis_results": {}}
 
     try:
+        from src.tools.analysis.calculate_conformation import calculate_end_to_end_distance
+
         # Step 1: Read simulation data
-        polymer_atoms, all_atoms, bonds, polymer_trajectory, box = read_simulation_data(datafile_path, dump_pattern)
+        polymer_atoms, all_atoms, bonds, polymer_trajectory, box, metadata = read_simulation_data(datafile_path, dump_pattern)
 
         # Determine polymer type
         polymer_type = "linear"
@@ -46,6 +107,8 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
             polymer_type = "star"
         elif "ring" in datafile_path:
             polymer_type = "ring"
+        elif "dendrimer" in datafile_path:
+            polymer_type = "dendrimer"
 
         # Store system information
         results["system_info"] = {
@@ -72,6 +135,22 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
 
         results["analysis_results"]["mean_radius_of_gyration"] = np.mean(results["analysis_results"]["radius_of_gyration_trajectory"])
 
+        # end-to-end distance
+        end_to_end_traj = []
+        end_to_end_chains_traj = []
+        for frame_positions in polymer_trajectory["polymer_atom_positions"]:
+            e2e = calculate_end_to_end_distance(frame_positions, polymer_trajectory["polymer_atom_ids"], bonds, polymer_type, polymer_atoms["types"])
+            if isinstance(e2e, dict):
+                end_to_end_traj.append(e2e["overall"])
+                end_to_end_chains_traj.append(e2e["chains"])
+            else:
+                end_to_end_traj.append(e2e)
+                end_to_end_chains_traj.append([e2e])
+        results["analysis_results"]["end_to_end_distance_trajectory"] = end_to_end_traj
+        results["analysis_results"]["end_to_end_distance_chains_trajectory"] = end_to_end_chains_traj
+        valid_e2e = [e for e in end_to_end_traj if e is not None and not np.isnan(e)]
+        results["analysis_results"]["mean_end_to_end_distance"] = np.mean(valid_e2e) if valid_e2e else None
+
         # persistence length
         lp_traj = []
         lp_chains_traj = []
@@ -97,14 +176,12 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
         # scattering
         # 1. use Rg to find appropriate q range
         Rg = results["analysis_results"]["mean_radius_of_gyration"]
-        q_value = np.logspace(-1, 1, 100) * 2 * np.pi / Rg
+        q_value = np.logspace(-1.5, 1.2, 80) * 2 * np.pi / Rg
         # 2. calculate P(q)
         all_pq = calculate_pq(polymer_trajectory["polymer_atom_positions"], q_value)
         results["analysis_results"]["scattering_q"] = q_value.tolist()
         results["analysis_results"]["scattering_pq"] = all_pq.tolist()
         results["analysis_results"]["mean_scattering_pq"] = np.mean(all_pq, axis=0).tolist()
-
-        # TODO: need to test the scattering calculation
 
         # Mark as successful
         results["metadata"]["success"] = True
@@ -186,78 +263,153 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
     mean_rg = conformation_results["analysis_results"].get("mean_radius_of_gyration", None)
     lp_traj = conformation_results["analysis_results"].get("persistence_length_trajectory", None)
     mean_lp = conformation_results["analysis_results"].get("mean_persistence_length", None)
+    e2e_traj = conformation_results["analysis_results"].get("end_to_end_distance_trajectory", None)
+    mean_e2e = conformation_results["analysis_results"].get("mean_end_to_end_distance", None)
     msd = conformation_results["analysis_results"].get("msd", None)
     msd_delt = conformation_results["analysis_results"].get("msd_delt", None)  # single float number
+    scattering_q = conformation_results["analysis_results"].get("scattering_q", None)
+    mean_scattering_pq = conformation_results["analysis_results"].get("mean_scattering_pq", None)
     t = np.arange(len(rg_traj)) * msd_delt if rg_traj is not None and msd_delt is not None else None
 
     print("msd_delt", msd_delt)
+    print(f"Data availability - rg_traj: {rg_traj is not None}, msd: {msd is not None}, scattering_q: {scattering_q is not None}")
 
-    # Create figure with subplots
-    fig, axes = plt.subplots(1, 3, figsize=(3.3 * 2, 3.3 * 0.7))
-    # fig.suptitle("Polymer Analysis Results", fontsize=16)
+    # Check if essential data is available
+    if rg_traj is None or msd is None or scattering_q is None or mean_scattering_pq is None:
+        print("❌ Essential data missing for plotting")
+        return
 
-    # Plot 1: Radius of gyration trajectory
-    if rg_traj is not None:
-        axes[0].plot(t, rg_traj, label="tajectory")
-        if mean_rg is not None:
-            axes[0].axhline(mean_rg, color="r", linestyle="--", label=f"mean: {mean_rg:.3f}")
-        axes[0].set_xlabel(r"$t$", fontsize=9)
-        axes[0].set_ylabel(r"$R_g$", fontsize=9)
-        axes[0].legend(fontsize=9)
-        axes[0].grid(True, alpha=0.3)
-        axes[0].tick_params(axis="both", which="both", direction="in", labelsize=7)
+    # Determine available data
+    has_persistence = lp_traj is not None and any(lp is not None for lp in lp_traj)
+    has_e2e = e2e_traj is not None and any(e is not None for e in e2e_traj)
 
-    # Plot 2: Persistence length trajectory (if available)
-    if lp_traj is not None and any(lp is not None for lp in lp_traj):
-        axes[1].plot(t, lp_traj, label="trajectory", color="g")
-        if mean_lp is not None:
-            axes[1].axhline(mean_lp, color="r", linestyle="--", label=f"mean: {mean_lp:.3f}")
-        axes[1].set_xlabel(r"$t$", fontsize=9)
-        axes[1].set_ylabel(r"$l_p$", fontsize=9)
-        axes[1].legend(fontsize=9)
-        axes[1].grid(True, alpha=0.3)
-        axes[1].tick_params(axis="both", which="both", direction="in", labelsize=7)
+    print(f"Optional data - persistence: {has_persistence}, e2e: {has_e2e}")
+
+    # Create figure with dynamic layout
+    if has_persistence and has_e2e:
+        # 3x2 layout when all data available
+        fig, axes = plt.subplots(3, 2, figsize=(3.3, 3.3 * 1.5))
+        plot_positions = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0)]
+        empty_pos = (2, 1)
     else:
-        axes[1].text(0.5, 0.5, "No persistence length data available", transform=axes[1].transAxes, ha="center", va="center", fontsize=10)
-        axes[1].axis("off")
+        # 2x2 layout when not all optional data available
+        fig, axes = plt.subplots(2, 2, figsize=(3.3, 3.3 * 1.0))
+        plot_positions = [(0, 0), (0, 1), (1, 0)]
+        if has_persistence:
+            plot_positions.append((1, 1))
+        elif has_e2e:
+            plot_positions.append((1, 1))
+        empty_pos = None
 
-    # Plot 3: diffusion
-    if msd is not None and t is not None:
-        axes[2].plot(t[: len(msd)], msd, "o", mfc="None", color="m", label="MSD")
+    print(f"Using layout: {len(plot_positions)} plots, empty_pos: {empty_pos}")
+
+    try:
+        # Plot 1: Radius of gyration trajectory (always available)
+        pos = plot_positions[0]
+        axes[pos].plot(t, rg_traj, lw=1)
+        if mean_rg is not None:
+            axes[pos].axhline(mean_rg, color="r", linestyle="--", label=f"mean: {mean_rg:.3f}")
+        axes[pos].set_xlabel(r"$t$", fontsize=9, labelpad=0)
+        axes[pos].set_ylabel(r"$R_g$", fontsize=9, labelpad=0)
+        axes[pos].legend(fontsize=7, frameon=True, ncol=1, columnspacing=0.5, handlelength=1, handletextpad=0.2)
+        axes[pos].grid(True, alpha=0.3)
+        axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+        axes[pos].set_title("Radius of gyration", fontsize=9, pad=3)
+
+        # Plot 2: Diffusion/MSD (always available)
+        pos = plot_positions[1]
+        axes[pos].plot(t[: len(msd)], msd, "o", mfc="None", color="m", lw=1)
         D = conformation_results["analysis_results"].get("diffusion_coefficient", "N/A")
         if D != "N/A":
-            axes[2].plot(t[: len(msd)], t[: len(msd)] * D * 6, "--", color="gray", label="6D*t")
-        axes[2].text(0.5, 0.9, f"D ~ {D:.2e}", transform=axes[2].transAxes, ha="center", va="center", fontsize=9)
-        axes[2].legend(fontsize=9)
-        axes[2].set_xlabel(r"$t$", fontsize=9)
-        axes[2].set_ylabel(r"MSD", fontsize=9)
-        axes[2].grid(True, alpha=0.3)
-        axes[2].tick_params(axis="both", which="both", direction="in", labelsize=7)
-    else:
-        axes[2].text(0.5, 0.5, "No MSD data available", transform=axes[2].transAxes, ha="center", va="center", fontsize=9)
-        axes[2].axis("off")
+            axes[pos].plot(t[: len(msd)], t[: len(msd)] * D * 6, "--", color="gray", label="6D*t"+"\n"+f"D ~ {D:.2e}", lw=1)
+        axes[pos].legend(fontsize=7, frameon=True, ncol=1, columnspacing=0.5, handlelength=1, handletextpad=0.2)
+        axes[pos].set_xlabel(r"$\Delta t$", fontsize=9, labelpad=0)
+        axes[pos].set_ylabel(r"MSD", fontsize=9, labelpad=0)
+        axes[pos].grid(True, alpha=0.3)
+        axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+        axes[pos].set_title("Diffusion", fontsize=9, pad=3)
 
-    plt.tight_layout(pad=0.5)
-    plt.savefig(f"{data_dir}/conformation_analysis.png")
-    plt.close()
+        # Plot 3: Scattering (P(q)) (always available)
+        pos = plot_positions[2]
+        axes[pos].loglog(scattering_q, mean_scattering_pq, 'b-', lw=1)
+        axes[pos].set_xlabel(r"$q$", fontsize=9, labelpad=0)
+        axes[pos].set_ylabel(r"$P(q)$", fontsize=9, labelpad=0)
+        axes[pos].grid(True, alpha=0.3)
+        axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+        axes[pos].set_title("Scattering Function", fontsize=9, pad=3)
+
+        # Plot optional data if available
+        plot_idx = 3
+        if has_persistence and plot_idx < len(plot_positions):
+            pos = plot_positions[plot_idx]
+            axes[pos].plot(t, lp_traj, color="g", lw=1)
+            if mean_lp is not None:
+                axes[pos].axhline(mean_lp, color="r", linestyle="--", label=f"mean: {mean_lp:.3f}")
+            axes[pos].set_xlabel(r"$t$", fontsize=9, labelpad=0)
+            axes[pos].set_ylabel(r"$l_p$", fontsize=9, labelpad=0)
+            axes[pos].legend(fontsize=7, frameon=True, ncol=1, columnspacing=0.5, handlelength=1, handletextpad=0.2)
+            axes[pos].grid(True, alpha=0.3)
+            axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+            axes[pos].set_title("Persistence length", fontsize=9, pad=3)
+            plot_idx += 1
+
+        if has_e2e and plot_idx < len(plot_positions):
+            pos = plot_positions[plot_idx]
+            valid_indices = [i for i, e in enumerate(e2e_traj) if e is not None]
+            valid_t = [t[i] for i in valid_indices] if t is not None else valid_indices
+            valid_e2e = [e2e_traj[i] for i in valid_indices]
+            axes[pos].plot(valid_t, valid_e2e, color="orange", lw=1)
+            if mean_e2e is not None:
+                axes[pos].axhline(mean_e2e, color="r", linestyle="--", label=f"mean: {mean_e2e:.3f}")
+            axes[pos].set_xlabel(r"$t$", fontsize=9, labelpad=0)
+            axes[pos].set_ylabel(r"$R_{ee}$", fontsize=9, labelpad=0)
+            axes[pos].legend(fontsize=7, frameon=True, ncol=1, columnspacing=0.5, handlelength=1, handletextpad=0.2)
+            axes[pos].grid(True, alpha=0.3)
+            axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+            axes[pos].set_title("End-to-end distance", fontsize=9, pad=3)
+
+        # if neither persistence and e2e available (1,1) is empty
+        if not has_persistence and not has_e2e:
+            empty_pos = (1, 1)
+
+        # Turn off empty subplots
+        if empty_pos is not None:
+            axes[empty_pos].axis("off")
+
+        plt.tight_layout(pad=0.1)
+        plt.savefig(f"{data_dir}/conformation_analysis.png", dpi=500, bbox_inches='tight')
+        plt.close()
+        print(f"✅ Plot saved successfully to {data_dir}/conformation_analysis.png")
+
+    except Exception as e:
+        print(f"❌ Error during plotting: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():
     """Main function demonstrating the analysis workflow."""
 
     # Example usage - replace with your actual file paths
-    data_dir = f"{project_root}/data/test/system_linear_polymer_30"
-    datafile_path = f"{project_root}/data/test/system_linear_polymer_30.data"
+    # data_dir = f"{project_root}/data/test/system_linear_polymer"
+    # datafile_path = f"{project_root}/data/test/system_linear_polymer.data"
 
+    # data_dir = f"{project_root}/data/test/system_brush_polymer"
+    # datafile_path = f"{project_root}/data/test/system_brush_polymer.data"
 
-    data_dir = f"{project_root}/data/test/system_brush_polymer_50_0.3_10"
-    datafile_path = f"{project_root}/data/test/system_brush_polymer_50_0.3_10.data"
+    # Use the ring polymer data that exists
+    data_dir = f"{project_root}/data/test/brush_workflow_50_0.2_10_20250919_160223/system_brush"
+    datafile_path = f"{project_root}/data/test/brush_workflow_50_0.2_10_20250919_160223/system_brush.data"
 
+    print(f"Looking for data in: {data_dir}")
+    print(f"Data file: {datafile_path}")
 
-    data_dir = f"{project_root}/data/test/system_star_polymer_8_4"
-    datafile_path = f"{project_root}/data/test/system_star_polymer_8_4.data"
+    if not os.path.exists(datafile_path):
+        print(f"❌ Data file not found: {datafile_path}")
+        return None
 
     dump_pattern = os.path.join(data_dir, "coord", "dump.*.txt")
+    print(f"Dump pattern: {dump_pattern}")
 
     print("Polymer Analysis Runner")
     print("=" * 50)
@@ -271,15 +423,19 @@ def main():
         save_analysis_results(results, output_file)
         print(f"\n💾 Results saved to {output_file}")
     else:
-        print(f"Analysis failed: {results['metadata']['error']}")
+        print(f"❌ Analysis failed: {results['metadata']['error']}")
+        return results
 
     # Plot results
     if results["metadata"]["success"]:
         conformation_analysis_json = f"{data_dir}/analysis_results.json"
-        plot_analysis_results(data_dir, conformation_analysis_json)
-        print(f"\n📊 Plots saved to {data_dir}/conformation_analysis.png")
+        if os.path.exists(conformation_analysis_json):
+            plot_analysis_results(data_dir, conformation_analysis_json)
+            print(f"\n📊 Plots saved to {data_dir}/conformation_analysis.png")
+        else:
+            print(f"❌ Analysis results file not found: {conformation_analysis_json}")
     else:
-        print(f"Analysis failed: {results['metadata']['error']}")
+        print(f"❌ Analysis failed: {results['metadata']['error']}")
 
     return results
 
