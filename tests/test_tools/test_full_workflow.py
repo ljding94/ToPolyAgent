@@ -42,7 +42,7 @@ from datetime import datetime
 def find_project_root(start_path):
     current_path = start_path
     while current_path != os.path.dirname(current_path):
-        if os.path.exists(os.path.join(current_path, 'setup.py')):
+        if os.path.exists(os.path.join(current_path, "setup.py")):
             return current_path
         current_path = os.path.dirname(current_path)
     raise ValueError("Could not find project root with setup.py")
@@ -50,17 +50,11 @@ def find_project_root(start_path):
 
 project_root = find_project_root(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, 'src'))
+sys.path.insert(0, os.path.join(project_root, "src"))
 
 
 # Import tools
-from tools.config_gen.generate_polymer import (
-    generate_brush_polymer_config,
-    generate_linear_polymer_config,
-    generate_ring_polymer_config,
-    generate_star_polymer_config,
-    generate_dendrimer_config
-)
+from tools.config_gen.generate_polymer import generate_brush_polymer_config, generate_linear_polymer_config, generate_ring_polymer_config, generate_star_polymer_config, generate_dendrimer_config
 from tools.config_gen.pack_solvent import pack_solvent
 from tools.config_gen.plot_config import plot_configuration
 from tools.simulation.run_lammps import run_lammps
@@ -91,15 +85,15 @@ def run_polymer_workflow(config, output_dir=None):
     print()
 
     # Extract and validate common params with defaults
-    polymer_type = config['polymer_type']
-    box_size = config.get('box_size', 40.0)
-    solvent_density = config.get('solvent_density', 0.1)
-    run_steps = config.get('run_steps', 50000)
-    thermostat = config.get('thermostat', "langevin")
-    interaction_params = config.get('interaction_params', {"pp": 1.0, "ss": 0.8, "sp": 0.5})
+    polymer_type = config["polymer_type"]
+    box_size = config.get("box_size", 40.0)
+    solvent_density = config.get("solvent_density", 0.1)
+    run_steps = config.get("run_steps", 50000)
+    thermostat = config.get("thermostat", "langevin")
+    interaction_params = config.get("interaction_params", {"pp": 1.0, "ss": 0.8, "sp": 0.5})
 
     # Extract type-specific params
-    polymer_params = config.get('polymer_params', {})
+    polymer_params = config.get("polymer_params", {})
     required_params = _get_required_params(polymer_type)  # Helper function, defined below
     for param in required_params:
         if param not in polymer_params:
@@ -109,7 +103,7 @@ def run_polymer_workflow(config, output_dir=None):
     if output_dir is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         dir_suffix = _get_dir_suffix(polymer_type, polymer_params)  # Helper function, defined below
-        output_dir = os.path.join(project_root, 'data', 'test', f"{polymer_type}_workflow_{dir_suffix}_{timestamp}")
+        output_dir = os.path.join(project_root, "data", "test", "tools", f"{polymer_type}_workflow_{dir_suffix}_{timestamp}")
 
     output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -118,11 +112,7 @@ def run_polymer_workflow(config, output_dir=None):
     print(f"Output directory: {os.path.abspath(output_dir)}")
     print()
 
-    workflow_results = {
-        "parameters": config,  # Store full config for reference
-        "steps": {},
-        "output_paths": {}
-    }
+    workflow_results = {"parameters": config, "steps": {}, "output_paths": {}}  # Store full config for reference
 
     try:
         # Step 1: Generate polymer configuration
@@ -134,41 +124,23 @@ def run_polymer_workflow(config, output_dir=None):
             print(f"  Grafting density: {polymer_params['grafting_density']}")
             print(f"  Side chain length: {polymer_params['side_chain_length']}")
             polymer_file = generate_brush_polymer_config(
-                backbone_length=polymer_params['backbone_length'],
-                grafting_density=polymer_params['grafting_density'],
-                side_chain_length=polymer_params['side_chain_length'],
-                box_size=box_size
+                backbone_length=polymer_params["backbone_length"], grafting_density=polymer_params["grafting_density"], side_chain_length=polymer_params["side_chain_length"], box_size=box_size
             )
         elif polymer_type == "linear":
             print(f"  Chain length: {polymer_params['chain_length']}")
-            polymer_file = generate_linear_polymer_config(
-                chain_length=polymer_params['chain_length'],
-                box_size=box_size
-            )
+            polymer_file = generate_linear_polymer_config(chain_length=polymer_params["chain_length"], box_size=box_size)
         elif polymer_type == "ring":
             print(f"  Ring length: {polymer_params['ring_length']}")
-            polymer_file = generate_ring_polymer_config(
-                ring_length=polymer_params['ring_length'],
-                box_size=box_size
-            )
+            polymer_file = generate_ring_polymer_config(ring_length=polymer_params["ring_length"], box_size=box_size)
         elif polymer_type == "star":
             print(f"  Arm length: {polymer_params['arm_length']}")
             print(f"  Number of arms: {polymer_params['num_arms']}")
-            polymer_file = generate_star_polymer_config(
-                arm_length=polymer_params['arm_length'],
-                num_arms=polymer_params['num_arms'],
-                box_size=box_size
-            )
+            polymer_file = generate_star_polymer_config(arm_length=polymer_params["arm_length"], num_arms=polymer_params["num_arms"], box_size=box_size)
         elif polymer_type == "dendrimer":
             print(f"  Generations: {polymer_params['generations']}")
             print(f"  Branching factor: {polymer_params['branching_factor']}")
             print(f"  Spacer: {polymer_params['spacer']}")
-            polymer_file = generate_dendrimer_config(
-                generations=polymer_params['generations'],
-                branching_factor=polymer_params['branching_factor'],
-                spacer=polymer_params['spacer'],
-                box_size=box_size
-            )
+            polymer_file = generate_dendrimer_config(generations=polymer_params["generations"], branching_factor=polymer_params["branching_factor"], spacer=polymer_params["spacer"], box_size=box_size)
         else:
             raise ValueError(f"Unsupported polymer type: {polymer_type}")
 
@@ -179,18 +151,14 @@ def run_polymer_workflow(config, output_dir=None):
         # Plot polymer configuration
         print("  Plotting polymer configuration...")
         plot_configuration(polymer_file)
-        polymer_plot_path = os.path.splitext(polymer_file)[0] + '.png'
+        polymer_plot_path = os.path.splitext(polymer_file)[0] + ".png"
         workflow_results["output_paths"]["polymer_plot"] = polymer_plot_path
 
         # Step 2: Pack solvent
         print("\nStep 2: Packing solvent around polymer...")
         print(f"  Solvent density: {solvent_density}")
 
-        system_file = pack_solvent(
-            polymer_datafile=polymer_file,
-            solvent_density=solvent_density,
-            box_size=box_size
-        )
+        system_file = pack_solvent(polymer_datafile=polymer_file, solvent_density=solvent_density, box_size=box_size)
 
         print(f"  ✓ System configuration saved to: {system_file}")
         workflow_results["steps"]["solvent_packing"] = "success"
@@ -199,7 +167,7 @@ def run_polymer_workflow(config, output_dir=None):
         # Plot system configuration
         print("  Plotting system configuration...")
         plot_configuration(system_file)
-        system_plot_path = os.path.splitext(system_file)[0] + '.png'
+        system_plot_path = os.path.splitext(system_file)[0] + ".png"
         workflow_results["output_paths"]["system_plot"] = system_plot_path
 
         # Step 3: Run LAMMPS simulation
@@ -209,13 +177,7 @@ def run_polymer_workflow(config, output_dir=None):
         print(f"  Interaction parameters: {interaction_params}")
 
         dump_path = system_file.replace(".data", "")
-        simulation_results = run_lammps(
-            dump_path=dump_path,
-            datafile_path=system_file,
-            thermostat=thermostat,
-            interaction_params=interaction_params,
-            run_steps=run_steps
-        )
+        simulation_results = run_lammps(dump_path=dump_path, datafile_path=system_file, thermostat=thermostat, interaction_params=interaction_params, run_steps=run_steps)
 
         print("  ✓ Simulation completed")
         print(f"  ✓ Dump files: {simulation_results['dump_files']}")
@@ -227,15 +189,15 @@ def run_polymer_workflow(config, output_dir=None):
 
         # Plot final configuration
         print("  Plotting final configuration...")
-        final_config_path = simulation_results['final_config']
+        final_config_path = simulation_results["final_config"]
 
         # Plot with solvent
         plot_configuration(final_config_path, plot_solvent=True)
-        final_plot_with_solvent = os.path.splitext(final_config_path)[0] + '.png'
+        final_plot_with_solvent = os.path.splitext(final_config_path)[0] + ".png"
 
         # Plot without solvent for better polymer visualization
         plot_configuration(final_config_path, plot_solvent=False)
-        final_plot_without_solvent = os.path.splitext(final_config_path)[0] + '_nosolvent.png'
+        final_plot_without_solvent = os.path.splitext(final_config_path)[0] + "_nosolvent.png"
 
         workflow_results["output_paths"]["final_plot"] = final_plot_with_solvent
         workflow_results["output_paths"]["final_plot_nosolvent"] = final_plot_without_solvent
@@ -244,18 +206,15 @@ def run_polymer_workflow(config, output_dir=None):
         print("\nStep 4: Analyzing simulation results...")
 
         datafile_path = system_file
-        dump_pattern = simulation_results['dump_files']
+        dump_pattern = simulation_results["dump_files"]
 
-        analysis_results = run_complete_analysis(
-            datafile_path=datafile_path,
-            dump_pattern=dump_pattern
-        )
+        analysis_results = run_complete_analysis(datafile_path=datafile_path, dump_pattern=dump_pattern)
 
         if analysis_results["metadata"]["success"]:
             print("  ✓ Analysis completed successfully")
 
             # Determine simulation subfolder (where final_state.data is saved)
-            simulation_subfolder = os.path.dirname(simulation_results['final_config'])
+            simulation_subfolder = os.path.dirname(simulation_results["final_config"])
 
             # Save analysis results in the simulation subfolder
             analysis_file = os.path.join(simulation_subfolder, "analysis_results.json")
@@ -283,7 +242,7 @@ def run_polymer_workflow(config, output_dir=None):
 
         if analysis_results["metadata"]["success"]:
             # Use simulation subfolder for plotting
-            simulation_subfolder = os.path.dirname(simulation_results['final_config'])
+            simulation_subfolder = os.path.dirname(simulation_results["final_config"])
             plot_analysis_results(simulation_subfolder, analysis_file)
             plot_file = os.path.join(simulation_subfolder, "conformation_analysis.png")
             print(f"  ✓ Plots saved to: {plot_file}")
@@ -295,7 +254,7 @@ def run_polymer_workflow(config, output_dir=None):
 
         # Save workflow summary
         workflow_file = os.path.join(output_dir, "workflow_summary.json")
-        with open(workflow_file, 'w') as f:
+        with open(workflow_file, "w") as f:
             json.dump(workflow_results, f, indent=2)
 
         print(f"\n✓ Workflow summary saved to: {workflow_file}")
@@ -315,7 +274,7 @@ def run_polymer_workflow(config, output_dir=None):
 
         # Save error summary
         workflow_file = os.path.join(output_dir, "workflow_summary.json")
-        with open(workflow_file, 'w') as f:
+        with open(workflow_file, "w") as f:
             json.dump(workflow_results, f, indent=2)
 
     return workflow_results
@@ -324,15 +283,15 @@ def run_polymer_workflow(config, output_dir=None):
 # Helper: Get required params for each type
 def _get_required_params(polymer_type):
     if polymer_type == "brush":
-        return ['backbone_length', 'grafting_density', 'side_chain_length']
+        return ["backbone_length", "grafting_density", "side_chain_length"]
     elif polymer_type == "linear":
-        return ['chain_length']
+        return ["chain_length"]
     elif polymer_type == "ring":
-        return ['ring_length']
+        return ["ring_length"]
     elif polymer_type == "star":
-        return ['arm_length', 'num_arms']
+        return ["arm_length", "num_arms"]
     elif polymer_type == "dendrimer":
-        return ['generations', 'branching_factor', 'spacer']
+        return ["generations", "branching_factor", "spacer"]
     else:
         raise ValueError(f"Unsupported polymer type: {polymer_type}")
 
@@ -362,12 +321,10 @@ def main():
             "box_size": 20.0,
             "solvent_density": 0.3,
             "run_steps": 10000,
-            #"thermostat": "langevin",
+            # "thermostat": "langevin",
             "thermostat": "nosehoover",
             "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},
-            "polymer_params": {
-                "chain_length": 50
-            }
+            "polymer_params": {"chain_length": 50},
         },
         "ring": {
             "polymer_type": "ring",
@@ -375,10 +332,8 @@ def main():
             "solvent_density": 0.3,
             "run_steps": 10000,
             "thermostat": "langevin",
-            "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5}, #
-            "polymer_params": {
-                "ring_length": 60
-            }
+            "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},  #
+            "polymer_params": {"ring_length": 60},
         },
         "brush": {
             "polymer_type": "brush",
@@ -387,11 +342,7 @@ def main():
             "run_steps": 10000,
             "thermostat": "langevin",
             "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},
-            "polymer_params": {
-                "backbone_length": 50,
-                "grafting_density": 0.2,
-                "side_chain_length": 10
-            }
+            "polymer_params": {"backbone_length": 50, "grafting_density": 0.2, "side_chain_length": 10},
         },
         "star": {
             "polymer_type": "star",
@@ -400,10 +351,7 @@ def main():
             "run_steps": 20000,
             "thermostat": "langevin",
             "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},
-            "polymer_params": {
-                "arm_length": 10,
-                "num_arms": 4
-            }
+            "polymer_params": {"arm_length": 10, "num_arms": 4},
         },
         "dendrimer": {
             "polymer_type": "dendrimer",
@@ -412,12 +360,8 @@ def main():
             "run_steps": 20000,
             "thermostat": "langevin",
             "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},
-            "polymer_params": {
-                "generations": 3,
-                "branching_factor": 3,
-                "spacer": 4
-            }
-        }
+            "polymer_params": {"generations": 3, "branching_factor": 3, "spacer": 4},
+        },
     }
 
     # Run selected workflows (e.g., all for full testing, or just one)
@@ -434,7 +378,7 @@ def main():
     # Optionally, summarize all results (e.g., check statuses)
     print("\nTest Summary:")
     for polymer_type, res in results.items():
-        status = res.get('status', 'unknown')
+        status = res.get("status", "unknown")
         print(f"  {polymer_type}: {status}")
 
     return results

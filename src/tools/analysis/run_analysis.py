@@ -93,6 +93,8 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
     """
     results = {"metadata": {"datafile_path": datafile_path, "dump_pattern": dump_pattern, "success": False, "error": None}, "system_info": {}, "analysis_results": {}}
 
+    data_dir = os.path.dirname(datafile_path)
+
     try:
         from src.tools.analysis.calculate_conformation import calculate_end_to_end_distance
 
@@ -226,24 +228,6 @@ def save_analysis_results(results: Dict[str, Any], output_file: str) -> None:
 
     with open(output_file, "w") as f:
         json.dump(serializable_results, f, indent=2)
-
-
-def load_analysis_results(input_file: str) -> Dict[str, Any]:
-    """
-    Load analysis results from a JSON file.
-
-    Parameters:
-    - input_file: Path to input JSON file
-
-    Returns:
-    - results: Analysis results dictionary
-    """
-    import json
-
-    with open(input_file, "r") as f:
-        results = json.load(f)
-
-    return results
 
 
 def plot_analysis_results(data_dir, conformation_analysis_json: str):
