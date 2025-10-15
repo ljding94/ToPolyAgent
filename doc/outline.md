@@ -3,7 +3,7 @@
 This revised plan updates the original `outline.md` to reflect the current state post-Phase 1 completion. Key changes include:
 - **Actual Directory Structure**: Incorporated the implemented structure from the project (e.g., added `plot_config.py`, `run_config_generation.py`, and specific test artifacts like workflow directories). Removed unimplemented items (e.g., `setup.py`, `TODOS.md`, `data/test/`) and adjusted for what's built (e.g., no `utils/` yet, wrappers are placeholders).
 - **Phase 1 Status**: Marked as complete, with summaries of achievements, including support for 5 topologies (linear, ring, brush, star, dendrimer), solvent packing, static LAMMPS simulation, and analysis tools. Added notes on tested features (e.g., thermostats: Langevin/Nose-Hoover; ensembles: NVT/NPT implied via fixes).
-- **Refinements for Phases 2-3**: Refreshed details based on current tools (e.g., wrappers will directly reference existing functions like `generate_brush_polymer_config`). Emphasized integration with CrewAI, prompt parsing, and extensibility (e.g., from `note.md`: agents for varying topologies/solvents/thermostats, potential human/search tools). Added timelines tied to ACS 2026 deadline (abstract due Sept 29, 2025—focus on demo-ready by then).
+- **Refinements for Phases 2-3**: Refreshed details based on current tools (e.g., wrappers will directly reference existing functions like `generate_brush_polymer_config`). Emphasized integration with CrewAI, prompt parsing, and extensibility (e.g., from `note.md`: agents for varying topologies/solvents/thermostats, potential human/search tools).
 - **General Updates**: Static `simulation.lammps` confirmed as effective; added error handling and logging recommendations. Ensured plan aligns with bead-spring model (LJ/FENE, single-bead solvent). Prioritized modularity for non-trivial features (e.g., multi-agent optimization of params).
 
 The system automates coarse-grained polymer simulations via CrewAI agents, driven by user prompts (e.g., "Simulate star polymer with 4 arms of length 10, solvent fraction 0.2, Langevin thermostat, analyze Rg and P(q)"). Pipeline: config generation → simulation → analysis → report.
@@ -15,7 +15,7 @@ ljding94-topolyagent/
 ├── README.md                   # Project overview, setup, usage
 ├── requirements.txt            # Dependencies (crewai, mdanalysis, numpy, etc.)
 ├── doc/
-│   ├── note.md                 # Ideas, references (e.g., solvent quality, ACS 2026)
+│   ├── note.md                 # Ideas, references
 │   └── outline.md              # This plan
 ├── src/
 │   ├── __init__.py
@@ -86,7 +86,6 @@ Unchanged from original, but now validated:
 ### Phase 2: Build Agent-Friendly Wrappers
 **Objective**: Wrap core tools as CrewAI `Tool` classes for LLM integration. Focus on type-safe inputs/outputs; handle errors gracefully. Add utils for shared needs.
 
-**Estimated Time**: 3-5 days (aim for completion by Sept 26, 2025, for ACS buffer).
 
 **Sub-Tasks**:
 1. **Setup Utils (src/utils/)**:
@@ -149,8 +148,6 @@ Unchanged from original, but now validated:
 ### Phase 3: Wrap Up Entire System
 **Objective**: Define agents, orchestrate via CrewAI, enable prompt-driven runs. Add reporting and extensibility.
 
-**Estimated Time**: 4-7 days (complete by Sept 29, 2025, for ACS abstract).
-
 **Sub-Tasks**:
 1. **Define Agents (src/agents/)**:
    - **StructureAgent**: Goal: "Parse prompt for polymer type/params/solvent, generate config." Tools: PolymerGeneratorTool, PackSolventTool. Outputs: System datafile path.
@@ -173,14 +170,11 @@ Unchanged from original, but now validated:
 
 5. **Polish**:
    - Logging: Integrate across agents.
-   - Docs: Update README with prompt examples, ACS demo (e.g., "AI-driven topology exploration").
    - Optional: Docker for portability.
 
-**Deliverables**: Full system; `main.py` for prompts; ACS-ready demo.
 
 ## Next Steps
 - Start Phase 2: Implement `config_wrappers.py` first (focus on brush for quick win).
 - By Sept 25: Phase 2 done; test partial crew.
-- Monitor ACS deadline: Prioritize core agents for abstract.
 
 This fresh outline positions us for rapid Phase 2/3 implementation. Thoughts on priorities?

@@ -1,6 +1,6 @@
 # Standard LAMMPS script for polymer simulations
 variable pdump equal 1000
-variable pequi equal 20000
+variable pequi equal 10000
 variable random equal 42
 variable time_step equal 0.01
 
@@ -66,7 +66,8 @@ unfix 1
 unfix 2
 
 # some thermalization after fixing overlaps
-run ${prun}
+#run ${prun}
+#run 30000
 # half for equilibrium, half for measurement
 
 # Apply thermostat conditionally
@@ -90,3 +91,7 @@ dump_modify 2 flush yes pad 9
 run ${prun}
 
 write_data ${dump_path}/final_state.data nocoeff
+
+# Write polymer-only configuration (exclude solvent atoms, type 3)
+group polymer type 1 2
+write_data ${dump_path}/final_polymer.data nocoeff

@@ -29,9 +29,34 @@ def run_lammps(dump_path, datafile_path, thermostat="langevin", interaction_para
         "-var", "eps_sp", str(interaction_params["sp"]),
         "-var", "prun", str(run_steps),
     ]
-    subprocess.run(cmd, check=True)  # Raise error on failure
 
-    return {"dump_files": f"{dump_path}/coord/dump.*.txt", "final_config": f"{dump_path}/final_state.data", "log": f"{dump_path}/log.lammps"}
+    # Run with real-time output streaming
+    print(f"\n{'='*80}")
+    print(f"Starting LAMMPS simulation...")
+    print(f"{'='*80}\n")
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        bufsize=1
+    )
+
+    # Stream output line by line in real-time
+    for line in process.stdout:
+        print(line, end='', flush=True)
+
+    process.wait()
+
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, cmd)
+
+    print(f"\n{'='*80}")
+    print(f"LAMMPS simulation completed successfully!")
+    print(f"{'='*80}\n")
+
+    return {"dump_files": f"{dump_path}/coord/dump.*.txt", "final_config": f"{dump_path}/final_state.data", "final_polymer_config": f"{dump_path}/final_polymer.data", "log": f"{dump_path}/log.lammps"}
 
 
 if __name__ == "__main__":

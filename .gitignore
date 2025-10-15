@@ -34,3 +34,7 @@ __pycache__/
 
 # Python egg-info
 *.egg-info/
+
+# ChromaDB files
+chromadb*.lock
+chroma-*.lock

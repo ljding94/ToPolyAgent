@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import json
+from src.utils.constants import DEFAULT_BOX_SIZE
 
 
 #####################################################################
@@ -157,12 +158,14 @@ def rotation_matrix_from_vectors(vec1, vec2):
 ####################################################################
 
 
-def generate_linear_polymer_config(chain_length, box_size=50.0):
+def generate_linear_polymer_config(chain_length, box_size=DEFAULT_BOX_SIZE, output_dir=None):
     """
     Generates LAMMPS datafile for a linear polymer (Gaussian chain).
 
     Parameters:
     - chain_length: int, number of beads in the chain
+    - box_size: float, size of simulation box
+    - output_dir: str, directory to save the datafile (default: current directory)
     - box_size: float, size of simulation box
 
     Returns:
@@ -214,7 +217,9 @@ def generate_linear_polymer_config(chain_length, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), "polymer_linear.data")
+    if output_dir is None:
+        output_dir = os.getcwd()
+    datafile_path = os.path.join(output_dir, "polymer_linear.data")
     with open(datafile_path, "w") as f:
         f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Linear polymer datafile\n")
@@ -243,16 +248,18 @@ def generate_linear_polymer_config(chain_length, box_size=50.0):
             f.write(f"{angle[0]} {angle[1]} {angle[2]} {angle[3]} {angle[4]}\n")
         f.write("\n")
 
+    print(f"DEBUG: Generated linear polymer with {chain_length} beads at {datafile_path}")
     return datafile_path
 
 
-def generate_ring_polymer_config(ring_length, box_size=50.0):
+def generate_ring_polymer_config(ring_length, box_size=DEFAULT_BOX_SIZE, output_dir=None):
     """
     Generates LAMMPS datafile for a ring polymer (cyclic polymer).
 
     Parameters:
     - ring_length: int, number of beads in the ring
     - box_size: float, size of simulation box
+    - output_dir: str, directory to save the datafile (default: current directory)
 
     Returns:
     - str: path to the generated datafile
@@ -278,7 +285,8 @@ def generate_ring_polymer_config(ring_length, box_size=50.0):
     # Gaussian chain parameters
     bond_length = 1.0
     angle_mean = 2 * np.pi / ring_length  # Ideal angle for regular polygon
-    angle_std = np.pi * 30.0 / 180.0  # 30 degree standard deviation
+    #angle_std = np.pi * 30.0 / 180.0  # 30 degree standard deviation
+    angle_std = np.pi * 0.0 / 180.0  # 30 degree standard deviation
 
     # Generate initial chain as Gaussian chain
     chain_positions = generate_gaussian_chain(ring_length, bond_length, angle_mean, angle_std)
@@ -324,7 +332,9 @@ def generate_ring_polymer_config(ring_length, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), "polymer_ring.data")
+    if output_dir is None:
+        output_dir = os.getcwd()
+    datafile_path = os.path.join(output_dir, "polymer_ring.data")
     with open(datafile_path, "w") as f:
         f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Ring polymer datafile\n")
@@ -356,7 +366,7 @@ def generate_ring_polymer_config(ring_length, box_size=50.0):
     return datafile_path
 
 
-def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_length, box_size=50.0):
+def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_length, box_size=DEFAULT_BOX_SIZE, output_dir=None):
     """
     Generates LAMMPS datafile for a brush polymer.
 
@@ -365,6 +375,7 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     - grafting_density: float, probability (0-1) of grafting a side chain at each backbone bead
     - side_chain_length: int, number of beads in each side chain
     - box_size: float, size of simulation box
+    - output_dir: str, directory to save the datafile (default: current directory)
 
     Returns:
     - str: path to the generated datafile
@@ -389,9 +400,9 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     # Gaussian chain parameters
     bond_length = 1.0
     backbone_angle_mean = 0.0
-    backbone_angle_std = np.pi * 60.0 / 180.0  # 10 degree standard deviation
+    backbone_angle_std = np.pi * 15.0 / 180.0  # 30 degree standard deviation
     side_chain_angle_mean = 0.0
-    side_chain_angle_std = np.pi * 60.0 / 180.0  # More flexible side chains
+    side_chain_angle_std = np.pi * 30.0 / 180.0  # More flexible side chains
 
     # Generate backbone as Gaussian chain
     backbone_positions = generate_gaussian_chain(backbone_length, bond_length, backbone_angle_mean, backbone_angle_std)
@@ -414,20 +425,16 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     # Side chains - uniformly distributed, Gaussian chains
     num_side_chains = int(backbone_length * grafting_density)
     if num_side_chains > 0:
-        # Calculate spacing between side chains for uniform distribution
-        spacing = max(1, backbone_length // num_side_chains)
-        side_chain_positions = []
-
-        # Distribute side chains uniformly along the backbone
-        for i in range(0, backbone_length, spacing):
-            if len(side_chain_positions) < num_side_chains:
-                side_chain_positions.append(i)
-
-        # If we have fewer side chains than desired, add more at the end
+        # Distribute side chains uniformly along the backbone using linspace for even spacing
+        backbone_indices = np.linspace(0, backbone_length - 1, num_side_chains)
+        side_chain_positions = [int(round(p)) for p in backbone_indices]
+        # Remove any duplicates that might occur due to rounding
+        side_chain_positions = list(dict.fromkeys(side_chain_positions))
+        # If we ended up with fewer due to duplicates, add more at available positions
         while len(side_chain_positions) < num_side_chains and len(side_chain_positions) < backbone_length:
-            next_pos = (side_chain_positions[-1] + spacing) % backbone_length
-            if next_pos not in side_chain_positions:
-                side_chain_positions.append(next_pos)
+            available_positions = [i for i in range(backbone_length) if i not in side_chain_positions]
+            if available_positions:
+                side_chain_positions.append(available_positions[0])
 
         # Generate side chains at the calculated positions
         for backbone_idx in side_chain_positions:
@@ -502,7 +509,9 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), "polymer_brush.data")
+    if output_dir is None:
+        output_dir = os.getcwd()
+    datafile_path = os.path.join(output_dir, "polymer_brush.data")
     with open(datafile_path, "w") as f:
         f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Brush polymer datafile\n")
@@ -535,7 +544,7 @@ def generate_brush_polymer_config(backbone_length, grafting_density, side_chain_
     return datafile_path
 
 
-def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
+def generate_star_polymer_config(arm_length, num_arms, box_size=DEFAULT_BOX_SIZE, output_dir=None):
     """
     Generates LAMMPS datafile for a star polymer.
 
@@ -543,6 +552,7 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     - arm_length: int, number of beads in each arm (excluding core)
     - num_arms: int, number of arms radiating from the core
     - box_size: float, size of simulation box
+    - output_dir: str, directory to save the datafile (default: current directory)
 
     Returns:
     - str: path to the generated datafile
@@ -571,7 +581,7 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     # Gaussian chain parameters
     bond_length = 1.0
     angle_mean = np.pi * 0.0
-    angle_std = np.pi * 60.0 / 180.0  # 30 degree standard deviation
+    angle_std = np.pi * 30.0 / 180.0  # 30 degree standard deviation
 
     # Core atom at origin
     core_pos = np.array([0.0, 0.0, 0.0])
@@ -665,7 +675,9 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
             positions[i] = new_pos
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), "polymer_star.data")
+    if output_dir is None:
+        output_dir = os.getcwd()
+    datafile_path = os.path.join(output_dir, "polymer_star.data")
     with open(datafile_path, "w") as f:
         f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Star polymer datafile\n")
@@ -698,8 +710,7 @@ def generate_star_polymer_config(arm_length, num_arms, box_size=50.0):
     return datafile_path
 
 
-
-def generate_dendrimer_config(generations, branching_factor, spacer=5, box_size=50.0):
+def generate_dendrimer_config(generations, branching_factor, spacer=5, box_size=DEFAULT_BOX_SIZE, output_dir=None):
     """
     Generates LAMMPS datafile for a dendrimer.
     Parameters:
@@ -707,6 +718,7 @@ def generate_dendrimer_config(generations, branching_factor, spacer=5, box_size=
     - branching_factor: int, number of branches per node (typically 2 or 3)
     - spacer: int, number of atoms per branch segment (1 = current behavior, >1 adds more atoms per line)
     - box_size: float, size of simulation box
+    - output_dir: str, directory to save the datafile (default: current directory)
     Returns:
     - str: path to the generated datafile
     """
@@ -851,7 +863,9 @@ def generate_dendrimer_config(generations, branching_factor, spacer=5, box_size=
         positions = [(p[0], p[1], p[2], p[3], p[4] - com[0], p[5] - com[1], p[6] - com[2]) for p in positions]
 
     # Write datafile
-    datafile_path = os.path.join(os.getcwd(), "polymer_dendrimer.data")
+    if output_dir is None:
+        output_dir = os.getcwd()
+    datafile_path = os.path.join(output_dir, "polymer_dendrimer.data")
     with open(datafile_path, "w") as f:
         f.write(f"# Metadata: {json.dumps(metadata)}\n")
         f.write("# Dendrimer datafile\n")

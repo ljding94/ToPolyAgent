@@ -4,7 +4,7 @@ import pyvista as pv
 import os
 
 
-def plot_configuration(data_file_path, solvent_size_factor=0.5, interactive=False, plot_box=True, plot_solvent=True):
+def plot_configuration(data_file_path, solvent_size_factor=0.5, interactive=False, plot_box=True, plot_solvent=True, output_dir=None):
     """
     Load a LAMMPS .data file and plot the configuration using PyVista.
     Shows atoms as spheres and bonds as lines for better polymer visualization.
@@ -18,14 +18,22 @@ def plot_configuration(data_file_path, solvent_size_factor=0.5, interactive=Fals
     """
 
     # Generate output image path
-    base_path = os.path.splitext(data_file_path)[0]
+    base_name = os.path.splitext(os.path.basename(data_file_path))[0]
+    if output_dir is None:
+        output_dir = os.path.dirname(data_file_path)
     if plot_solvent:
-        output_image_path = base_path + '.png'
+        output_image_path = os.path.join(output_dir, f"{base_name}.png")
     else:
-        output_image_path = base_path + '_nosolvent.png'
+        output_image_path = os.path.join(output_dir, f"{base_name}_nosolvent.png")
 
     # Load the data using MDAnalysis
     u = mda.Universe(data_file_path, format='DATA')
+
+    # If not plotting solvent, translate polymer beads to center of mass at (0,0,0)
+    if not plot_solvent:
+        polymer_mask = u.atoms.types.astype(int) <= 2
+        com = np.mean(u.atoms.positions[polymer_mask], axis=0)
+        u.atoms.positions[polymer_mask] -= com
 
     # Get atom positions and types
     positions = u.atoms.positions
@@ -177,12 +185,14 @@ def plot_configuration(data_file_path, solvent_size_factor=0.5, interactive=Fals
         # Show the plot interactively
         plotter.show()
         print("Configuration plot displayed interactively")
+        return None  # No file saved
     else:
         # Save screenshot
         plotter.screenshot(output_image_path, scale=3)
         # Close plotter
         plotter.close()
         print(f"Configuration plot saved to {output_image_path}")
+        return output_image_path
 
 
 

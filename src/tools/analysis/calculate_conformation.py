@@ -11,21 +11,21 @@ def calculate_radius_of_gyration(positions):
     - positions: Array of atom positions (n_frames, n_atoms, 3) or (n_atoms, 3)
 
     Returns:
-    - rg: Radius of gyration value(s)
+    - rg2: Radius of gyration value(s) squared
     """
     if positions.ndim == 2:
         # Single frame
         positions = positions[np.newaxis, :, :]
 
-    rg_values = []
+    rg2_values = []
     for frame_positions in positions:
         # Calculate center of mass
         com = np.mean(frame_positions, axis=0)
         # Calculate radius of gyration
-        rg_value = np.sqrt(np.sum((frame_positions - com)**2) / len(frame_positions))
-        rg_values.append(rg_value)
+        rg2_value = np.sum((frame_positions - com)**2) / len(frame_positions)
+        rg2_values.append(rg2_value)
 
-    return np.array(rg_values)
+    return np.array(rg2_values)
 
 
 def calculate_persistence_length(positions, bonds, atom_ids, polymer_type="linear", atom_types=None):
@@ -295,7 +295,7 @@ def calculate_diffusion_coefficient(trajectory_positions, steps, timestep=0.01*1
 
     # Calculate mean square displacement
     msd = [0]  # for dts=0 case
-    for dt in range(1, len(com_trajectory)//2):
+    for dt in range(1, len(com_trajectory)):
         displacements = com_trajectory[dt:] - com_trajectory[:-dt]
         sq_disp = np.sum(displacements**2, axis=1)
         msd.append(np.mean(sq_disp))

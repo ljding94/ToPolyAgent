@@ -26,7 +26,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
 
-from src.wrappers.config_wrappers import PolymerGeneratorTool, PackSolventTool, PlotConfigTool
+from src.wrappers.config_wrappers import (
+    GenerateLinearPolymerTool,
+    GenerateRingPolymerTool,
+    GenerateBrushPolymerTool,
+    GenerateStarPolymerTool,
+    GenerateDendrimerTool,
+    PackSolventTool
+)
 from src.wrappers.sim_wrappers import RunLammpsTool
 from src.wrappers.analysis_wrappers import ComprehensiveAnalysisTool, PlotAnalysisTool
 
@@ -52,7 +59,7 @@ TEST_CONFIGS = {
         "thermostat": "langevin",
         "interaction_params": {"pp": 0.3, "ss": 0.3, "sp": 1.5},
         "polymer_params": {
-            "ring_length": 30
+            "chain_length": 30
         }
     },
     "brush": {
@@ -125,7 +132,7 @@ def run_wrapper_test(config, output_dir=None):
         if polymer_type == "linear":
             suffix = f"{polymer_params['chain_length']}"
         elif polymer_type == "ring":
-            suffix = f"{polymer_params['ring_length']}"
+            suffix = f"{polymer_params['chain_length']}"
         elif polymer_type == "brush":
             suffix = f"{polymer_params['backbone_length']}_{polymer_params['grafting_density']}_{polymer_params['side_chain_length']}"
         elif polymer_type == "star":
@@ -151,26 +158,68 @@ def run_wrapper_test(config, output_dir=None):
     try:
         # Step 1: Generate polymer configuration
         print("\nStep 1: Generating polymer configuration...")
-        polymer_tool = PolymerGeneratorTool()
-        polymer_path = polymer_tool._run(polymer_type, polymer_params, box_size)
+        tool_map = {
+            "linear": GenerateLinearPolymerTool(),
+            "ring": GenerateRingPolymerTool(),
+            "brush": GenerateBrushPolymerTool(),
+            "star": GenerateStarPolymerTool(),
+            "dendrimer": GenerateDendrimerTool()
+        }
+        polymer_tool = tool_map[polymer_type]
+
+        # Call with specific parameters
+        if polymer_type == "linear":
+            polymer_path = polymer_tool._run(
+                chain_length=polymer_params["chain_length"],
+                box_size=box_size,
+                output_dir=output_dir
+            )
+        elif polymer_type == "ring":
+            polymer_path = polymer_tool._run(
+                chain_length=polymer_params["chain_length"],
+                box_size=box_size,
+                output_dir=output_dir
+            )
+        elif polymer_type == "brush":
+            polymer_path = polymer_tool._run(
+                backbone_length=polymer_params["backbone_length"],
+                grafting_density=polymer_params["grafting_density"],
+                side_chain_length=polymer_params["side_chain_length"],
+                box_size=box_size,
+                output_dir=output_dir
+            )
+        elif polymer_type == "star":
+            polymer_path = polymer_tool._run(
+                arm_length=polymer_params["arm_length"],
+                num_arms=polymer_params["num_arms"],
+                box_size=box_size,
+                output_dir=output_dir
+            )
+        elif polymer_type == "dendrimer":
+            polymer_path = polymer_tool._run(
+                generation=polymer_params["generation"],
+                branching_factor=polymer_params["branching_factor"],
+                box_size=box_size,
+                output_dir=output_dir
+            )
+
         print(f"Generated polymer: {polymer_path}")
         test_results["output_paths"]["polymer"] = polymer_path
 
-        # Plot polymer without solvent
-        plot_tool = PlotConfigTool()
-        polymer_plot_path = plot_tool._run(polymer_path, show_solvent=False)
+        # Polymer plot is automatically generated
+        polymer_plot_path = polymer_path.replace('.data', '_nosolvent.png')
         print(f"Plotted polymer config: {polymer_plot_path}")
         test_results["output_paths"]["polymer_plot"] = polymer_plot_path
 
         # Step 2: Pack solvent
         print("\nStep 2: Packing solvent...")
         solvent_tool = PackSolventTool()
-        system_path = solvent_tool._run(polymer_path, solvent_density, box_size)
+        system_path = solvent_tool._run(polymer_path, solvent_density, box_size, output_dir)
         print(f"Packed solvent: {system_path}")
         test_results["output_paths"]["system"] = system_path
 
-        # Plot system with solvent
-        system_plot_path = plot_tool._run(system_path, show_solvent=True)
+        # System plot is automatically generated
+        system_plot_path = system_path.replace('.data', '.png')
         print(f"Plotted system config: {system_plot_path}")
         test_results["output_paths"]["system_plot"] = system_plot_path
 
@@ -181,10 +230,10 @@ def run_wrapper_test(config, output_dir=None):
         print(f"Simulation completed: {sim_result}")
         test_results["simulation_result"] = sim_result
 
-        # Plot final state
+        # Final plots are handled by analysis workflow
         final_config = sim_result["final_config"]
-        final_plot_no_solvent = plot_tool._run(final_config, show_solvent=False)
-        final_plot_with_solvent = plot_tool._run(final_config, show_solvent=True)
+        final_plot_no_solvent = final_config.replace('.data', '_nosolvent.png')
+        final_plot_with_solvent = final_config.replace('.data', '.png')
         print(f"Plotted final configs: {final_plot_no_solvent}, {final_plot_with_solvent}")
         test_results["output_paths"]["final_plot_no_solvent"] = final_plot_no_solvent
         test_results["output_paths"]["final_plot_with_solvent"] = final_plot_with_solvent

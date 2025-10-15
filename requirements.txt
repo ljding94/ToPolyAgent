@@ -1,7 +1,0 @@
-crewai
-mdanalysis
-numpy
-scipy
-ovito
-matplotlib
-pyvista

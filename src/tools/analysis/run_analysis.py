@@ -18,7 +18,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.insert(0, project_root)
 
-from src.tools.analysis import read_simulation_data, calculate_radius_of_gyration, calculate_persistence_length, calculate_diffusion_coefficient, calculate_pq
+from src.tools.analysis import read_simulation_data, calculate_radius_of_gyration, calculate_persistence_length, calculate_diffusion_coefficient, calculate_pq, calculate_gr
 
 
 def analyze_conformation(atoms, bonds, trajectory, box, polymer_type="linear"):
@@ -132,10 +132,12 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
 
         # Step 2: Run conformation analysis
 
+        n_frames = results["trajectory_info"]["n_frames"]
         # rg
         results["analysis_results"]["radius_of_gyration_trajectory"] = calculate_radius_of_gyration(polymer_trajectory["polymer_atom_positions"]).tolist()
 
-        results["analysis_results"]["mean_radius_of_gyration"] = np.mean(results["analysis_results"]["radius_of_gyration_trajectory"])
+        #results["analysis_results"]["mean_radius_of_gyration"] = np.mean(results["analysis_results"]["radius_of_gyration_trajectory"])
+        results["analysis_results"]["mean_radius_of_gyration"] = np.mean(results["analysis_results"]["radius_of_gyration_trajectory"][int(n_frames/2):])
 
         # end-to-end distance
         end_to_end_traj = []
@@ -150,8 +152,8 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
                 end_to_end_chains_traj.append([e2e])
         results["analysis_results"]["end_to_end_distance_trajectory"] = end_to_end_traj
         results["analysis_results"]["end_to_end_distance_chains_trajectory"] = end_to_end_chains_traj
-        valid_e2e = [e for e in end_to_end_traj if e is not None and not np.isnan(e)]
-        results["analysis_results"]["mean_end_to_end_distance"] = np.mean(valid_e2e) if valid_e2e else None
+        valid_e2e_second_half = [e for i, e in enumerate(end_to_end_traj) if i >= int(n_frames/2) and e is not None and not np.isnan(e)]
+        results["analysis_results"]["mean_end_to_end_distance"] = np.mean(valid_e2e_second_half) if valid_e2e_second_half else None
 
         # persistence length
         lp_traj = []
@@ -167,23 +169,37 @@ def run_complete_analysis(datafile_path: str, dump_pattern: str) -> Dict[str, An
                 lp_chains_traj.append([lp])
         results["analysis_results"]["persistence_length_trajectory"] = lp_traj
         results["analysis_results"]["persistence_length_chains_trajectory"] = lp_chains_traj
-        results["analysis_results"]["mean_persistence_length"] = np.mean([lp for lp in lp_traj if lp is not None and not np.isnan(lp)])
+        valid_lp_second_half = [lp for i, lp in enumerate(lp_traj) if i >= int(n_frames/2) and lp is not None and not np.isnan(lp)]
+        results["analysis_results"]["mean_persistence_length"] = np.mean(valid_lp_second_half) if valid_lp_second_half else None
 
         # diffusion
-        D, msd, dts = calculate_diffusion_coefficient(polymer_trajectory["polymer_atom_positions"], polymer_trajectory["steps"], 0.01 * 1000)  # matching lammps script
+        half_idx = int(n_frames / 2)
+        positions_second_half = polymer_trajectory["polymer_atom_positions"][half_idx:]
+        steps_second_half = polymer_trajectory["steps"][half_idx:]
+        D, msd, dts = calculate_diffusion_coefficient(positions_second_half, steps_second_half, 0.01 * 1000)  # matching lammps script
         results["analysis_results"]["msd"] = msd.tolist() if msd is not None else None
         results["analysis_results"]["msd_delt"] = 0.01 * 1000
         results["analysis_results"]["diffusion_coefficient"] = float(D)
 
         # scattering
-        # 1. use Rg to find appropriate q range
-        Rg = results["analysis_results"]["mean_radius_of_gyration"]
+        # 1. use Rg2 to find appropriate q range
+        Rg2 = results["analysis_results"]["mean_radius_of_gyration"]
+        Rg = np.sqrt(Rg2)
         q_value = np.logspace(-1.5, 1.2, 80) * 2 * np.pi / Rg
         # 2. calculate P(q)
         all_pq = calculate_pq(polymer_trajectory["polymer_atom_positions"], q_value)
         results["analysis_results"]["scattering_q"] = q_value.tolist()
         results["analysis_results"]["scattering_pq"] = all_pq.tolist()
-        results["analysis_results"]["mean_scattering_pq"] = np.mean(all_pq, axis=0).tolist()
+        results["analysis_results"]["mean_scattering_pq"] = np.mean(all_pq[int(n_frames/2):], axis=0).tolist()
+
+        # 3. calculate g(r)
+        box_length = box["lengths"][0]  # assuming cubic box
+        r_bins = np.linspace(0, box_length / 4, 100)
+        all_gr = calculate_gr(polymer_trajectory["polymer_atom_positions"], r_bins, box_length)
+        r_mid = (r_bins[:-1] + r_bins[1:]) / 2
+        results["analysis_results"]["radial_distribution_r"] = r_mid.tolist()
+        results["analysis_results"]["radial_distribution_gr"] = all_gr.tolist()
+        results["analysis_results"]["mean_radial_distribution_gr"] = np.mean(all_gr[int(n_frames/2):], axis=0).tolist()
 
         # Mark as successful
         results["metadata"]["success"] = True
@@ -253,13 +269,15 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
     msd_delt = conformation_results["analysis_results"].get("msd_delt", None)  # single float number
     scattering_q = conformation_results["analysis_results"].get("scattering_q", None)
     mean_scattering_pq = conformation_results["analysis_results"].get("mean_scattering_pq", None)
+    radial_distribution_r = conformation_results["analysis_results"].get("radial_distribution_r", None)
+    mean_radial_distribution_gr = conformation_results["analysis_results"].get("mean_radial_distribution_gr", None)
     t = np.arange(len(rg_traj)) * msd_delt if rg_traj is not None and msd_delt is not None else None
 
     print("msd_delt", msd_delt)
-    print(f"Data availability - rg_traj: {rg_traj is not None}, msd: {msd is not None}, scattering_q: {scattering_q is not None}")
+    print(f"Data availability - rg_traj: {rg_traj is not None}, msd: {msd is not None}, scattering_q: {scattering_q is not None}, radial_distribution_r: {radial_distribution_r is not None}")
 
     # Check if essential data is available
-    if rg_traj is None or msd is None or scattering_q is None or mean_scattering_pq is None:
+    if rg_traj is None or msd is None or scattering_q is None or mean_scattering_pq is None or radial_distribution_r is None or mean_radial_distribution_gr is None:
         print("❌ Essential data missing for plotting")
         return
 
@@ -269,23 +287,12 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
 
     print(f"Optional data - persistence: {has_persistence}, e2e: {has_e2e}")
 
-    # Create figure with dynamic layout
-    if has_persistence and has_e2e:
-        # 3x2 layout when all data available
-        fig, axes = plt.subplots(3, 2, figsize=(3.3, 3.3 * 1.5))
-        plot_positions = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0)]
-        empty_pos = (2, 1)
-    else:
-        # 2x2 layout when not all optional data available
-        fig, axes = plt.subplots(2, 2, figsize=(3.3, 3.3 * 1.0))
-        plot_positions = [(0, 0), (0, 1), (1, 0)]
-        if has_persistence:
-            plot_positions.append((1, 1))
-        elif has_e2e:
-            plot_positions.append((1, 1))
-        empty_pos = None
+    # Create figure with 3x2 layout
+    fig, axes = plt.subplots(3, 2, figsize=(3.3, 3.3 * 1.5))
+    plot_positions = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]
+    empty_positions = []
 
-    print(f"Using layout: {len(plot_positions)} plots, empty_pos: {empty_pos}")
+    print(f"Using 3x2 layout with {len(plot_positions)} potential plots")
 
     try:
         # Plot 1: Radius of gyration trajectory (always available)
@@ -294,7 +301,7 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
         if mean_rg is not None:
             axes[pos].axhline(mean_rg, color="r", linestyle="--", label=f"mean: {mean_rg:.3f}")
         axes[pos].set_xlabel(r"$t$", fontsize=9, labelpad=0)
-        axes[pos].set_ylabel(r"$R_g$", fontsize=9, labelpad=0)
+        axes[pos].set_ylabel(r"$R_g^2$", fontsize=9, labelpad=0)
         axes[pos].legend(fontsize=7, frameon=True, ncol=1, columnspacing=0.5, handlelength=1, handletextpad=0.2)
         axes[pos].grid(True, alpha=0.3)
         axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
@@ -322,8 +329,17 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
         axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
         axes[pos].set_title("Scattering Function", fontsize=9, pad=3)
 
+        # Plot 4: Radial distribution function g(r) (always available)
+        pos = plot_positions[3]
+        axes[pos].plot(radial_distribution_r, mean_radial_distribution_gr, 'r-', lw=1)
+        axes[pos].set_xlabel(r"$r$", fontsize=9, labelpad=0)
+        axes[pos].set_ylabel(r"$g(r)$", fontsize=9, labelpad=0)
+        axes[pos].grid(True, alpha=0.3)
+        axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
+        axes[pos].set_title("Radial Distribution", fontsize=9, pad=3)
+
         # Plot optional data if available
-        plot_idx = 3
+        plot_idx = 4
         if has_persistence and plot_idx < len(plot_positions):
             pos = plot_positions[plot_idx]
             axes[pos].plot(t, lp_traj, color="g", lw=1)
@@ -335,6 +351,9 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
             axes[pos].grid(True, alpha=0.3)
             axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
             axes[pos].set_title("Persistence length", fontsize=9, pad=3)
+            plot_idx += 1
+        else:
+            empty_positions.append(plot_positions[plot_idx])
             plot_idx += 1
 
         if has_e2e and plot_idx < len(plot_positions):
@@ -351,14 +370,12 @@ def plot_analysis_results(data_dir, conformation_analysis_json: str):
             axes[pos].grid(True, alpha=0.3)
             axes[pos].tick_params(axis="both", which="both", direction="in", labelsize=7, pad=1)
             axes[pos].set_title("End-to-end distance", fontsize=9, pad=3)
-
-        # if neither persistence and e2e available (1,1) is empty
-        if not has_persistence and not has_e2e:
-            empty_pos = (1, 1)
+        else:
+            empty_positions.append(plot_positions[plot_idx])
 
         # Turn off empty subplots
-        if empty_pos is not None:
-            axes[empty_pos].axis("off")
+        for pos in empty_positions:
+            axes[pos].axis("off")
 
         plt.tight_layout(pad=0.1)
         plt.savefig(f"{data_dir}/conformation_analysis.png", dpi=500, bbox_inches='tight')

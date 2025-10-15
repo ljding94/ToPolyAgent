@@ -2,22 +2,35 @@
 
 from .analysis_wrappers import (
     ComprehensiveAnalysisTool,
-    PlotAnalysisTool
+    PlotAnalysisTool,
+    PlotFinalConfigurationsTool
 )
 from .config_wrappers import (
-    PolymerGeneratorTool,
-    PackSolventTool,
-    PlotConfigTool
+    GenerateLinearPolymerTool,
+    GenerateRingPolymerTool,
+    GenerateBrushPolymerTool,
+    GenerateStarPolymerTool,
+    GenerateDendrimerTool,
+    PackSolventTool
 )
 from .sim_wrappers import (
     RunLammpsTool
 )
+from .workflow_wrappers import (
+    FullWorkflowTool,
+    run_full_workflow
+)
 
 __all__ = [
-    "PolymerGeneratorTool",
+    "GenerateLinearPolymerTool",
+    "GenerateRingPolymerTool",
+    "GenerateBrushPolymerTool",
+    "GenerateStarPolymerTool",
+    "GenerateDendrimerTool",
     "PackSolventTool",
-    "PlotConfigTool",
     "RunLammpsTool",
     "ComprehensiveAnalysisTool",
-    "PlotAnalysisTool"
+    "PlotAnalysisTool",
+    "FullWorkflowTool",
+    "run_full_workflow"
 ]

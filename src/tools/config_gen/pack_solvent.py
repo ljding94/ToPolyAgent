@@ -3,7 +3,7 @@ import os
 import json
 
 
-def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
+def pack_solvent(polymer_datafile, solvent_density, box_size=50.0, output_dir=None):
     """
     Adds solvent beads around the polymer, avoiding overlaps.
 
@@ -15,6 +15,12 @@ def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
     Returns:
     - str: path to full system datafile
     """
+    # Ensure the polymer file is fully written (flush any pending I/O)
+    if os.path.exists(polymer_datafile):
+        # Force filesystem sync by reading and immediately closing
+        with open(polymer_datafile, 'r') as test_f:
+            test_f.read(1)
+
     # Read polymer metadata
     polymer_metadata = {}
     with open(polymer_datafile, 'r') as f:
@@ -22,6 +28,9 @@ def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
         if first_line.startswith("# Metadata:"):
             metadata_str = first_line[len("# Metadata:"):].strip()
             polymer_metadata = json.loads(metadata_str)
+
+    print(f"DEBUG: Reading polymer file {polymer_datafile}")
+    print(f"DEBUG: Polymer metadata: {polymer_metadata}")
 
     polymer_type = polymer_metadata.get("type", "unknown")
 
@@ -140,7 +149,10 @@ def pack_solvent(polymer_datafile, solvent_density, box_size=50.0):
             print(f"Warning: Could not place solvent bead {i+1} without overlap")
 
     # Create system datafile
-    dirname = os.path.dirname(polymer_datafile)
+    if output_dir is None:
+        dirname = os.path.dirname(polymer_datafile)
+    else:
+        dirname = output_dir
     system_datafile = os.path.join(dirname, f"system_{polymer_type}.data")
 
     # System metadata
