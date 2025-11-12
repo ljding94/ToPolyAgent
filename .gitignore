@@ -3,7 +3,7 @@
 
 # Then allow specific files and folders
 !README.md
-#!setup.py
+!setup.py
 !requirements.txt
 #!TODOS.md
 
@@ -34,7 +34,3 @@ __pycache__/
 
 # Python egg-info
 *.egg-info/
-
-# ChromaDB files
-chromadb*.lock
-chroma-*.lock
