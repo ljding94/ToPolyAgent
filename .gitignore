@@ -4,6 +4,7 @@
 # Then allow specific files and folders
 !README.md
 !setup.py
+!ToPolyAgent_cli.py
 !requirements.txt
 #!TODOS.md
 
