@@ -10,5 +10,6 @@ setup(
         "mdanalysis",
         "numpy",
         "scipy",
+        "litellm"
     ],
 )

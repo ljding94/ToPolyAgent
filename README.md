@@ -2,9 +2,15 @@
 
 🤖 **Multi-Agent AI Framework for Polymer Simulations**
 
-https://arxiv.org/abs/2510.12091
+[![arXiv](https://img.shields.io/badge/arXiv-2510.12091-b31b1b.svg)](https://arxiv.org/abs/2510.12091)
 
 ToPolyAgent is a cutting-edge multi-agent AI system that enables natural language-driven coarse-grained molecular dynamics simulations of topological polymers. By integrating Large Language Models (LLMs) with specialized computational tools, it democratizes complex polymer simulations for researchers across disciplines.
+
+## 📖 Understanding the Repository
+
+To understand this repository, and let AI help you navigate and setup the project,
+use [gitingest](https://gitingest.com/github.com/ljding94/ToPolyAgent) to create a LLM-friendly version of this repo.
+Then your coding agent should be able to help you with any questions about the codebase!
 
 ## ✨ Key Features
 
@@ -17,6 +23,7 @@ ToPolyAgent is a cutting-edge multi-agent AI system that enables natural languag
 
 ## 📋 Table of Contents
 
+- [Understanding the Repository](#understanding-the-repository)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
@@ -37,11 +44,23 @@ ToPolyAgent is a cutting-edge multi-agent AI system that enables natural languag
 
 ### Install LAMMPS
 
+ToPolyAgent uses the `lmp_serial` command to run LAMMPS simulations. Ensure `lmp_serial` is installed and available in your PATH.
+
 ```bash
 # Using conda (recommended)
 conda install -c conda-forge lammps
 
-# Or ensure lmp/lammps is in your PATH
+# Alternative: Using Homebrew (macOS)
+brew install lammps
+
+# Verify installation
+which lmp_serial
+
+# If lmp_serial is not found, but you have another LAMMPS executable (e.g., lmp_mpi), create an alias:
+# alias lmp_serial='lmp_mpi'
+# Or add to your shell profile (e.g., ~/.bashrc or ~/.zshrc):
+# echo "alias lmp_serial='lmp_mpi'" >> ~/.zshrc
+# source ~/.zshrc
 ```
 
 ### Install ToPolyAgent
@@ -222,7 +241,7 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install in development mode
-pip install -e ".[dev]"
+pip install -e .
 
 # Run tests
 pytest
